@@ -1,0 +1,44 @@
+{
+  "name": "commerce-framework",
+  "version": "0.1.0",
+  "description": "Lightweight, modular backend framework for headless e-commerce systems, built with Node.js and TypeScript.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "commerce-cli": "cli/index.js"
+  },
+  "files": [
+    "dist",
+    "cli",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/dev-server.js",
+    "dev:build": "tsc --watch",
+    "dev:run": "node --watch dist/dev-server.js",
+    "cli": "node cli/index.js",
+    "migrate": "node dist/migrate.js",
+    "bench": "node bench/run.js",
+    "verify": "node scripts/verify.js",
+    "setup": "node scripts/setup-env.js",
+    "test": "tsc -p tsconfig.test.json && node --test --test-concurrency=1 \"build-test/tests/**/*.test.js\""
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/node": "^24.13.6",
+    "@types/pg": "^8.23.1",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "commander": "^15.0.0",
+    "dotenv": "^18.0.3",
+    "pg": "^8.23.0"
+  }
+}

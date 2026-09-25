@@ -1,0 +1,25 @@
+require("dotenv").config({ quiet: true });
+const { loadConfig, Logger, createCommerceApp } = require("commerce-framework");
+
+// Creates or updates this store's tables. Safe to run again: already-applied
+// migrations are skipped.
+async function main() {
+  const config = loadConfig();
+  const app = createCommerceApp({
+    databaseUrl: config.databaseUrl,
+    ownerApiKey: config.ownerApiKey,
+    authTokenSecret: config.authTokenSecret,
+    logger: new Logger("info"),
+  });
+  try {
+    const applied = await app.migrate();
+    console.log(applied.length ? `Done: ${applied.length} migration(s) applied.` : "Database is already up to date.");
+  } finally {
+    await app.pool.end();
+  }
+}
+
+main().catch((err) => {
+  console.error(err instanceof Error ? err.message : err);
+  process.exitCode = 1;
+});

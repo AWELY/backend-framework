@@ -1,0 +1,92 @@
+{
+  "environment": {
+    "node": "v24.19.0",
+    "os": "Windows_NT 10.0.26200",
+    "cpu": "12th Gen Intel(R) Core(TM) i5-12450H",
+    "logicalCores": 12,
+    "totalMemoryGB": 8,
+    "concurrency": 50,
+    "durationSeconds": 10
+  },
+  "scryptVerifyMs": 35,
+  "footprint": {
+    "packageSizeKB": 72,
+    "unpackedSizeKB": 281.7,
+    "packagedFiles": 179,
+    "directRuntimeDependencies": [
+      "commander",
+      "dotenv",
+      "pg"
+    ],
+    "totalRuntimePackagesInstalled": 16
+  },
+  "startupMs": 197,
+  "memoryMB": {
+    "idleRss": 53,
+    "idleHeapUsed": 7,
+    "afterLoadRss": 195,
+    "afterLoadHeapUsed": 8
+  },
+  "results": [
+    {
+      "scenario": "GET /health (framework + DB ping)",
+      "requests": 186296,
+      "requestsPerSecond": 18630,
+      "latencyMs": {
+        "p50": 2.42,
+        "p95": 4.24,
+        "p99": 6.05,
+        "max": 23.01
+      },
+      "errors": 0
+    },
+    {
+      "scenario": "GET /products?limit=20 (DB read, list)",
+      "requests": 45841,
+      "requestsPerSecond": 4584,
+      "latencyMs": {
+        "p50": 10.72,
+        "p95": 14.33,
+        "p99": 16.54,
+        "max": 22.19
+      },
+      "errors": 0
+    },
+    {
+      "scenario": "GET /products/:id (DB read, one row)",
+      "requests": 113355,
+      "requestsPerSecond": 11336,
+      "latencyMs": {
+        "p50": 4.12,
+        "p95": 6.57,
+        "p99": 8.46,
+        "max": 16.11
+      },
+      "errors": 0
+    },
+    {
+      "scenario": "POST /carts (DB write)",
+      "requests": 46789,
+      "requestsPerSecond": 4679,
+      "latencyMs": {
+        "p50": 10.3,
+        "p95": 14.82,
+        "p99": 17.73,
+        "max": 26.02
+      },
+      "errors": 0
+    },
+    {
+      "scenario": "POST /customers/login flood (rate limited -> 429)",
+      "requests": 111423,
+      "requestsPerSecond": 11142,
+      "latencyMs": {
+        "p50": 4.23,
+        "p95": 5.93,
+        "p99": 7.61,
+        "max": 12.3
+      },
+      "errors": 0
+    }
+  ]
+}

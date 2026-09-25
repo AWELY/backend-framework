@@ -1,0 +1,20 @@
+{
+  "name": "demo-store",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Demo e-commerce API built on commerce-framework, used to prove the framework is reusable.",
+  "main": "index.js",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "migrate": "node migrate.js",
+    "seed": "node seed.js",
+    "scenario": "node scenario.js"
+  },
+  "dependencies": {
+    "commerce-framework": "file:../..",
+    "dotenv": "^18.0.3"
+  }
+}

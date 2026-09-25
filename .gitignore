@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build-test/
+.env
+*.log
+
+# Project documents (proposals) are kept outside the repository
+*.docx
+*.pdf
+# Office lock files
+~$*

@@ -1,0 +1,17 @@
+{
+  "name": "__PROJECT_NAME__",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "migrate": "node migrate.js"
+  },
+  "dependencies": {
+    "commerce-framework": "file:__FRAMEWORK_PATH__",
+    "dotenv": "^18.0.3"
+  }
+}
