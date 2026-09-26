@@ -16,6 +16,7 @@ interface CartRow {
 interface LineRow {
   product_id: string;
   name: string;
+  image_url: string | null;
   price: number;
   quantity: number;
   is_active: boolean;
@@ -54,7 +55,7 @@ export class CartRepository {
     if (!cart) return null;
 
     const lines = await this.run<LineRow>(
-      `SELECT ci.product_id, p.name, p.price, ci.quantity, p.is_active
+      `SELECT ci.product_id, p.name, p.image_url, p.price, ci.quantity, p.is_active
          FROM cart_items ci JOIN products p ON p.id = ci.product_id
         WHERE ci.cart_id = $1
         ORDER BY ci.added_at`,
@@ -63,6 +64,7 @@ export class CartRepository {
     const items: CartLine[] = lines.rows.map((l) => ({
       productId: l.product_id,
       name: l.name,
+      imageUrl: l.image_url,
       unitPrice: l.price,
       quantity: l.quantity,
       lineTotal: l.price * l.quantity,

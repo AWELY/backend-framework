@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-label="smartwatch">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f1f5ff"/><stop offset="1" stop-color="#dde6f7"/></linearGradient></defs>
+<rect width="400" height="400" fill="url(#bg)"/>
+<ellipse cx="200" cy="345" rx="110" ry="14" fill="#0b1f3a" opacity=".08"/>
+<g fill="none" stroke="#0b1f3a" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+<rect x="162" y="60" width="76" height="70" rx="14"/><rect x="162" y="270" width="76" height="70" rx="14"/>
+<rect x="130" y="125" width="140" height="150" rx="34" fill="#fff"/>
+<path d="M200 165 V200 L225 215" stroke="#ff7a00"/><line x1="272" y1="180" x2="282" y2="180"/>
+</g>
+</svg>

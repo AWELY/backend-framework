@@ -29,7 +29,7 @@ import { OrdersService, ORDERS_SERVICE } from "./orders.service";
  *   PATCH /orders/:id/status      orders:write (owner)   body { status }
  *   PATCH /orders/:id/payment     orders:write (owner)   body { status, reference? }
  *   GET   /checkout/options       public   -> shipping and payment methods offered by installed plugins
- *   POST  /checkout/quote         cart holder   body { cartId, shippingAddress, shippingMethod? } -> totals
+ *   POST  /checkout/quote         cart holder   body { cartId, shippingAddress, shippingCity?, shippingMethod? } -> totals
  *
  * Amounts are integers in the smallest currency unit. Shipping and payment
  * methods come from plugins (Plugin/Extension System); with none installed,
@@ -65,7 +65,9 @@ export const ordersModule: CommerceModule = {
 
     router.get("/checkout/options", (_req, res) => {
       res.json({
-        shippingMethods: extensions.shippingProviders().map((p) => ({ id: p.id, name: p.name })),
+        shippingMethods: extensions
+          .shippingProviders()
+          .map((p) => ({ id: p.id, name: p.name, ...(p.cities ? { cities: p.cities } : {}) })),
         paymentMethods: extensions.paymentProviders().map((p) => ({ id: p.id, name: p.name })),
       });
     });

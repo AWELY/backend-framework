@@ -22,7 +22,20 @@ export const productsMigrations: Migration[] = [
       CREATE INDEX products_category_id_idx ON products (category_id);
     `,
   },
+  {
+    // A NEW migration (not an edit of 0200) so databases that already have the
+    // products table just gain the column.
+    id: "0800_products_image_url",
+    up: `ALTER TABLE products ADD COLUMN image_url TEXT;`,
+  },
 ];
+
+/**
+ * A full URL (https://cdn.example/x.jpg) or a path on the storefront's own site
+ * (/images/x.jpg). Only a LINK is stored - the image files themselves live with
+ * the storefront or a CDN, so the framework keeps a single storage system.
+ */
+export const IMAGE_URL_PATTERN = /^(https?:\/\/|\/)\S+$/;
 
 /**
  * `price` is an integer in the currency's SMALLEST unit (dirhams for LYD,
@@ -36,6 +49,7 @@ export const productInputSchema = {
   price: { type: "number", integer: true, min: 0 },
   categoryId: { type: "string", pattern: UUID_REGEX, optional: true },
   isActive: { type: "boolean", optional: true },
+  imageUrl: { type: "string", maxLength: 2000, pattern: IMAGE_URL_PATTERN, optional: true },
 } as const satisfies Schema;
 
 export type ProductInput = Infer<typeof productInputSchema>;
@@ -48,6 +62,7 @@ export interface Product {
   price: number;
   categoryId: string | null;
   isActive: boolean;
+  imageUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

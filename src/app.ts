@@ -126,7 +126,15 @@ export function createCommerceApp(options: CommerceAppOptions): CommerceApp {
     logger,
     extensions,
     migrate: () => runMigrations(pool, migrations, (m) => logger.info(m)),
-    listen: (port) => new Promise((resolve) => server.listen(port, () => resolve())),
+    // A busy port rejects the promise (instead of crashing with an unhandled 'error' event).
+    listen: (port) =>
+      new Promise((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(port, () => {
+          server.off("error", reject);
+          resolve();
+        });
+      }),
     close: async () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await pool.end();

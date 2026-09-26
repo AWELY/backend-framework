@@ -12,6 +12,7 @@ interface OrderRow {
   contact_name: string;
   contact_phone: string;
   shipping_address: string;
+  shipping_city: string | null;
   subtotal: number;
   shipping_method: string | null;
   shipping_cost: number;
@@ -59,6 +60,7 @@ export class OrdersRepository {
       contactName: row.contact_name,
       contactPhone: row.contact_phone,
       shippingAddress: row.shipping_address,
+      shippingCity: row.shipping_city,
       subtotal: row.subtotal,
       shippingMethod: row.shipping_method,
       shippingCost: row.shipping_cost,
@@ -133,6 +135,7 @@ export class OrdersRepository {
     contactName: string;
     contactPhone: string;
     shippingAddress: string;
+    shippingCity: string | null;
     subtotal: number;
     shippingMethod: string | null;
     shippingCost: number;
@@ -140,15 +143,16 @@ export class OrdersRepository {
     items: OrderItem[];
   }): Promise<string> {
     const { rows } = await this.run<{ id: string }>(
-      `INSERT INTO orders (customer_id, cart_id, contact_name, contact_phone, shipping_address,
+      `INSERT INTO orders (customer_id, cart_id, contact_name, contact_phone, shipping_address, shipping_city,
                            subtotal, shipping_method, shipping_cost, total, payment_method)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
       [
         order.customerId,
         order.cartId,
         order.contactName,
         order.contactPhone,
         order.shippingAddress,
+        order.shippingCity,
         order.subtotal,
         order.shippingMethod,
         order.shippingCost,

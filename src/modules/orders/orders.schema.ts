@@ -55,6 +55,11 @@ export const ordersMigrations: Migration[] = [
       UPDATE orders SET subtotal = total;
     `,
   },
+  {
+    // The destination city on its own, for city-based delivery pricing.
+    id: "0810_orders_shipping_city",
+    up: `ALTER TABLE orders ADD COLUMN shipping_city TEXT;`,
+  },
 ];
 
 export const PAYMENT_STATUSES = ["unpaid", "pending", "paid", "failed", "refunded"] as const;
@@ -77,6 +82,8 @@ export const checkoutSchema = {
   contactName: { type: "string", minLength: 1, maxLength: 120 },
   contactPhone: { type: "string", maxLength: 30, pattern: PHONE },
   shippingAddress: { type: "string", minLength: 5, maxLength: 500 },
+  // Required by shipping methods that price by city (they list their cities).
+  shippingCity: { type: "string", minLength: 1, maxLength: 100, optional: true },
   // Required only when the store has shipping / payment plugins installed.
   shippingMethod: { type: "string", maxLength: 50, optional: true },
   paymentMethod: { type: "string", maxLength: 50, optional: true },
@@ -85,6 +92,7 @@ export const checkoutSchema = {
 export const quoteSchema = {
   cartId: { type: "string", pattern: UUID_REGEX },
   shippingAddress: { type: "string", minLength: 5, maxLength: 500 },
+  shippingCity: { type: "string", minLength: 1, maxLength: 100, optional: true },
   shippingMethod: { type: "string", maxLength: 50, optional: true },
 } as const satisfies Schema;
 
@@ -115,6 +123,7 @@ export interface Order {
   contactName: string;
   contactPhone: string;
   shippingAddress: string;
+  shippingCity: string | null;
   /** Items only. */
   subtotal: number;
   shippingMethod: string | null;

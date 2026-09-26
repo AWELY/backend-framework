@@ -96,11 +96,21 @@ export class OrdersService {
     return provider;
   }
 
-  private async shippingCost(provider: ShippingProvider | null, lines: LineRow[], shippingAddress: string): Promise<number> {
+  private async shippingCost(
+    provider: ShippingProvider | null,
+    lines: LineRow[],
+    destination: { shippingAddress: string; shippingCity?: string }
+  ): Promise<number> {
     if (!provider) return 0;
     const items = lines.map((l) => ({ productId: l.product_id, quantity: l.quantity, unitPrice: l.price }));
     const subtotal = items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
-    const cost = await provider.quote({ items, subtotal, shippingAddress });
+    // Pass ONLY what pricing needs - not the buyer's name, phone or payment choice.
+    const cost = await provider.quote({
+      items,
+      subtotal,
+      shippingAddress: destination.shippingAddress,
+      shippingCity: destination.shippingCity,
+    });
     if (!Number.isInteger(cost) || cost < 0) {
       throw new Error(`Shipping provider '${provider.id}' returned an invalid cost: ${cost}`);
     }
@@ -130,7 +140,7 @@ export class OrdersService {
     const lines = (await this.loadLines(this.pool, cart.id)).rows.filter((l) => l.is_active);
     const provider = this.resolveShipping(input.shippingMethod);
     const subtotal = lines.reduce((sum, l) => sum + l.price * l.quantity, 0);
-    const shippingCost = await this.shippingCost(provider, lines, input.shippingAddress);
+    const shippingCost = await this.shippingCost(provider, lines, input);
     return { subtotal, shippingMethod: provider?.id ?? null, shippingCost, total: subtotal + shippingCost };
   }
 
@@ -185,9 +195,10 @@ export class OrdersService {
         contactName: input.contactName,
         contactPhone: input.contactPhone,
         shippingAddress: input.shippingAddress,
+        shippingCity: input.shippingCity ?? null,
         subtotal: items.reduce((sum, i) => sum + i.lineTotal, 0),
         shippingMethod: shipping?.id ?? null,
-        shippingCost: await this.shippingCost(shipping, lines, input.shippingAddress),
+        shippingCost: await this.shippingCost(shipping, lines, input),
         paymentMethod: paymentProvider?.id ?? null,
         items,
       });

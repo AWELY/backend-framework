@@ -21,8 +21,11 @@ tested against a real PostgreSQL 17 database:
 - Plugin/Extension System: shipping providers, payment providers, order events,
   plugin routes. Built-in: cash on delivery, flat-rate shipping.
 - CLI: `create <name>` scaffolds a working store project.
-- Tests: 66 unit + integration tests (`npm test`).
+- Tests: 77 unit + integration tests (`npm test`) + a real-browser test of the website.
 - Demo E-Commerce API: `examples/demo-store` (see its README).
+- **AMA storefront** (`storefront/`): a real Arabic e-commerce website (electronics &
+  phone accessories, Tripoli - Tajoura) built on the framework - plain HTML/CSS/JS,
+  city-based delivery, cash on delivery, guest and customer checkout. See `storefront/README.md`.
 - Documentation (Arabic): `docs/API.md` (API contract), `docs/PERFORMANCE.md`
   (performance evaluation, `npm run bench`).
 
@@ -34,7 +37,8 @@ tested against a real PostgreSQL 17 database:
 
 ## Setup
 
-Step-by-step guide for a new machine (Windows, Arabic): `docs/SETUP.md`.
+Step-by-step guide for a new machine (Arabic): `docs/SETUP.md` (Windows) or
+`docs/SETUP-LINUX.md` (Ubuntu/Debian, with notes for other distributions).
 
 ```bash
 npm install
@@ -109,6 +113,7 @@ src/
 cli/            scaffolding tool (commander) + templates; never imports src/
 tests/          unit/ and integration/ (node:test, real PostgreSQL)
 examples/       demo-store: a store built on the framework as a library
+storefront/     AMA: the store's API (api/) + website (web/) + browser test
 bench/          performance evaluation (npm run bench)
 docs/           API contract and performance report (Arabic)
 ```

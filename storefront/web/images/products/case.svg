@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-label="phone case">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f1f5ff"/><stop offset="1" stop-color="#dde6f7"/></linearGradient></defs>
+<rect width="400" height="400" fill="url(#bg)"/>
+<ellipse cx="200" cy="345" rx="110" ry="14" fill="#0b1f3a" opacity=".08"/>
+<g fill="none" stroke="#0b1f3a" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+<rect x="140" y="70" width="120" height="260" rx="30" fill="#fff"/>
+<rect x="158" y="90" width="44" height="60" rx="14"/><circle cx="180" cy="108" r="8" stroke="#ff7a00"/><circle cx="180" cy="134" r="8" stroke="#ff7a00"/>
+<circle cx="200" cy="230" r="18" stroke="#ff7a00"/>
+</g>
+</svg>

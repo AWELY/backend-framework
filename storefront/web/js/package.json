@@ -1,0 +1,5 @@
+{
+  "type": "module",
+  "private": true,
+  "description": "Marks these browser scripts as ES modules for tooling (node --check). Browsers ignore this file."
+}

@@ -1,0 +1,22 @@
+{
+  "name": "ama-storefront",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AMA - electronics and phone accessories store (Tripoli, Tajoura). Website + API built on commerce-framework.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "setup": "node setup-env.js",
+    "migrate": "node api/migrate.js",
+    "seed": "node api/seed.js",
+    "api": "node api/index.js",
+    "web": "node web-server.js",
+    "start": "node start.js",
+    "test:browser": "node tests/browser.mjs"
+  },
+  "dependencies": {
+    "commerce-framework": "file:..",
+    "dotenv": "^18.0.3"
+  }
+}

@@ -5,3 +5,4 @@
  */
 export { cashOnDelivery } from "./cash-on-delivery";
 export { flatRateShipping, type FlatRateShippingOptions } from "./flat-rate-shipping";
+export { cityRateShipping, type CityRateShippingOptions } from "./city-rate-shipping";

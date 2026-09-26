@@ -11,6 +11,7 @@ interface ProductRow {
   price: number;
   category_id: string | null;
   is_active: boolean;
+  image_url: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -37,6 +38,7 @@ export class ProductsRepository extends Repository<Product, ProductRow> {
       price: row.price,
       categoryId: row.category_id,
       isActive: row.is_active,
+      imageUrl: row.image_url,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -62,8 +64,8 @@ export class ProductsRepository extends Repository<Product, ProductRow> {
 
   async create(input: ProductInput): Promise<Product> {
     const result = await this.query(
-      `INSERT INTO products (name, slug, description, price, category_id, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      `INSERT INTO products (name, slug, description, price, category_id, is_active, image_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [
         input.name,
         input.slug,
@@ -71,6 +73,7 @@ export class ProductsRepository extends Repository<Product, ProductRow> {
         input.price,
         input.categoryId ?? null,
         input.isActive ?? true,
+        input.imageUrl ?? null,
       ]
     );
     return this.toEntity(result.rows[0] as ProductRow);
@@ -86,6 +89,7 @@ export class ProductsRepository extends Repository<Product, ProductRow> {
         price: "price",
         categoryId: "category_id",
         isActive: "is_active",
+        imageUrl: "image_url",
       },
       input
     );

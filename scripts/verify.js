@@ -10,6 +10,7 @@
  *   2. tests          - all unit + integration tests (real PostgreSQL)
  *   3. CLI            - generate a new store, install, migrate, start, call it
  *   4. demo store     - migrate, seed, start, run the 16-step shopping scenario
+ *   5. AMA storefront - API + website: pages, security headers, cities, CORS preflight
  *
  * Every database step uses TEST_DATABASE_URL (it is wiped), never your
  * development data. Temporary folders are deleted at the end, pass or fail.
@@ -53,17 +54,18 @@ function freePort() {
   });
 }
 
-/** Starts `node <file>` and resolves once GET /health answers 200. */
-async function startServer(file, cwd, env) {
+/** Starts `node <file>` and resolves once GET <probe> answers 200 (default: the API's /health). */
+async function startServer(file, cwd, env, probe) {
   const child = spawn(process.execPath, [file], { cwd, env: { ...process.env, ...env }, stdio: "pipe" });
   let log = "";
   child.stdout.on("data", (d) => (log += d));
   child.stderr.on("data", (d) => (log += d));
   const base = `http://localhost:${env.PORT}`;
+  const probeUrl = probe ?? `${base}/health`;
   for (let i = 0; i < 100; i++) {
     if (child.exitCode !== null) throw new Error(`server exited early:\n${log}`);
     try {
-      if ((await fetch(`${base}/health`)).status === 200) return { child, base, log: () => log };
+      if ((await fetch(probeUrl)).status === 200) return { child, base, log: () => log };
     } catch {
       // not listening yet
     }
@@ -204,7 +206,70 @@ async function main() {
   });
 }
 
+async function storefrontStep() {
+  const storeDir = join(ROOT, "storefront");
+  let api;
+  let web;
+  try {
+    rmSync(join(storeDir, "node_modules", "commerce-framework"), { recursive: true, force: true });
+    run("npm", ["install", "--loglevel=error"], storeDir);
+    await resetTestDatabase();
+    const apiPort = await freePort();
+    const webPort = await freePort();
+    const origin = `http://localhost:${webPort}`;
+    const env = {
+      DATABASE_URL: TEST_DB,
+      PORT: String(apiPort),
+      WEB_PORT: String(webPort),
+      OWNER_API_KEY: secret(),
+      AUTH_TOKEN_SECRET: secret(),
+      CORS_ORIGIN: origin,
+    };
+    run("npm", ["run", "migrate", "--silent"], storeDir, env);
+    const seeded = run("npm", ["run", "seed", "--silent"], storeDir, env);
+    if (!/Seeded \d+ record/.test(seeded)) throw new Error(`unexpected seed output: ${seeded}`);
+    api = await startServer(join("api", "index.js"), storeDir, env);
+    web = await startServer("web-server.js", storeDir, env, `${origin}/index.html`);
+
+    for (const page of ["index", "product", "cart", "checkout", "account", "orders", "track"]) {
+      const res = await fetch(`${origin}/${page}.html`);
+      if (res.status !== 200) throw new Error(`${page}.html -> ${res.status}`);
+      if (!(res.headers.get("content-security-policy") ?? "").includes("script-src 'self'")) {
+        throw new Error(`${page}.html is missing its Content-Security-Policy`);
+      }
+    }
+    const js = await fetch(`${origin}/js/pages/checkout.js`);
+    if (!(js.headers.get("content-type") ?? "").includes("javascript")) throw new Error("scripts served with the wrong type");
+    const secretProbe = await (await fetch(`${origin}/../.env`)).text();
+    if (secretProbe.includes("OWNER_API_KEY")) throw new Error("the website server leaked .env");
+
+    const options = await (await fetch(`${api.base}/checkout/options`)).json();
+    const cityRate = options.shippingMethods.find((m) => m.id === "city-rate");
+    if (!cityRate?.cities?.includes("تاجوراء")) throw new Error("city-based delivery (with Tajoura) is not configured");
+
+    // The CORS preflight a browser sends before "add to cart" (this was a real bug once).
+    const preflight = await fetch(`${api.base}/carts/00000000-0000-0000-0000-000000000000/items`, {
+      method: "OPTIONS",
+      headers: { Origin: origin, "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type" },
+    });
+    if (preflight.status !== 204 || preflight.headers.get("access-control-allow-origin") !== origin) {
+      throw new Error(`CORS preflight failed: ${preflight.status} ${preflight.headers.get("access-control-allow-origin")}`);
+    }
+
+    const scripts = ["config", "store", "api", "ui", "order-view"]
+      .map((f) => join(storeDir, "web", "js", `${f}.js`))
+      .concat(["home", "product", "cart", "checkout", "account", "orders", "track"].map((f) => join(storeDir, "web", "js", "pages", `${f}.js`)));
+    for (const file of scripts) run(process.execPath, ["--check", file], storeDir);
+
+    return `16 products seeded, 7 pages with CSP, ${cityRate.cities.length} delivery cities, CORS preflight OK, ${scripts.length} scripts valid`;
+  } finally {
+    await stopServer(api);
+    await stopServer(web);
+  }
+}
+
 main()
+  .then(() => (results.some((r) => r.name === "build (TypeScript)" && r.ok) ? step("AMA storefront: API + website", storefrontStep) : undefined))
   .catch((err) => {
     results.push({ name: "verify script", ok: false });
     console.error(err);

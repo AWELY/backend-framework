@@ -100,8 +100,8 @@ export { ORDERS_REPOSITORY } from "./modules/orders/orders.repository";
 export { ORDERS_SERVICE } from "./modules/orders/orders.service";
 export type { Order, OrderItem, OrderStatus, PaymentStatus } from "./modules/orders/orders.schema";
 
-export { cashOnDelivery, flatRateShipping } from "./plugins";
-export type { FlatRateShippingOptions } from "./plugins";
+export { cashOnDelivery, flatRateShipping, cityRateShipping } from "./plugins";
+export type { FlatRateShippingOptions, CityRateShippingOptions } from "./plugins";
 
 export { createCommerceApp } from "./app";
 export type { CommerceApp, CommerceAppOptions } from "./app";

@@ -61,14 +61,16 @@
 |---|---|---|---|
 | GET | `/products?categoryId=` | عام | المفعّلة فقط، والمالك يرى المخفية أيضاً |
 | GET | `/products/:id` | عام | المخفي يعطي 404 للزائر |
-| POST | `/products` | `products:write` | body: `name`، `slug`، `price`، `description?`، `categoryId?`، `isActive?` |
+| POST | `/products` | `products:write` | body: `name`، `slug`، `price`، `description?`، `categoryId?`، `isActive?`، `imageUrl?` |
 | PATCH | `/products/:id` | `products:write` | يعدّل الحقول المرسلة فقط |
 | DELETE | `/products/:id` | `products:write` | 204. مخزونه يُحذف معه، والطلبات القديمة تحتفظ باسمه وسعره |
 
 ```json
 { "id": "…", "name": "Blue Mug", "slug": "blue-mug", "description": null, "price": 15000,
-  "categoryId": "…", "isActive": true, "createdAt": "…", "updatedAt": "…" }
+  "categoryId": "…", "isActive": true, "imageUrl": "/images/blue-mug.jpg", "createdAt": "…", "updatedAt": "…" }
 ```
+
+`imageUrl`: **رابط** للصورة لا ملف، فالصور نفسها تُخزَّن مع الواجهة أو في CDN. يقبل رابطاً كاملاً `https://…` أو مساراً في موقع المتجر `/images/…`، ويرفض غير ذلك (مثل `javascript:`) لمنع حقن كود في الواجهة.
 
 ## المخزون
 
@@ -111,7 +113,7 @@
 
 ```json
 { "id": "…", "customerId": null, "status": "open", "total": 38000,
-  "items": [ { "productId": "…", "name": "Mug", "unitPrice": 15000, "quantity": 2, "lineTotal": 30000, "available": true } ] }
+  "items": [ { "productId": "…", "name": "Mug", "imageUrl": "/images/mug.jpg", "unitPrice": 15000, "quantity": 2, "lineTotal": 30000, "available": true } ] }
 ```
 
 ## إتمام الشراء والطلبات
@@ -119,14 +121,25 @@
 | الطريقة | المسار | الصلاحية | الوصف |
 |---|---|---|---|
 | GET | `/checkout/options` | عام | طرق الشحن والدفع التي توفرها الإضافات المثبتة |
-| POST | `/checkout/quote` | صاحب السلة | body: `{ cartId, shippingAddress, shippingMethod? }` → `{ subtotal, shippingMethod, shippingCost, total }` |
-| POST | `/orders` | ضيف أو زبون | body: `{ cartId, contactName, contactPhone, shippingAddress, shippingMethod?, paymentMethod? }` → 201 |
+| POST | `/checkout/quote` | صاحب السلة | body: `{ cartId, shippingAddress, shippingCity?, shippingMethod? }` → `{ subtotal, shippingMethod, shippingCost, total }` |
+| POST | `/orders` | ضيف أو زبون | body: `{ cartId, contactName, contactPhone, shippingAddress, shippingCity?, shippingMethod?, paymentMethod? }` → 201 |
 | GET | `/orders?status=` | مسجَّل | المالك يرى الكل، والزبون يرى طلباته |
 | GET | `/orders/:id` | — | المالك، أو صاحب الطلب، أو ضيف يرسل `?phone=` مطابقاً لهاتف الطلب |
 | PATCH | `/orders/:id/status` | `orders:write` | body: `{ status }` |
 | PATCH | `/orders/:id/payment` | `orders:write` | body: `{ status, reference? }` |
 
 **إتمام الشراء كتلة واحدة:** إما أن يتم كله أو لا يتم منه شيء. إن نفد أي منتج (409) لا يُباع شيء وتبقى السلة مفتوحة. السلة لا تتحول لطلب مرتين. `shippingMethod` و`paymentMethod` مطلوبان فقط إن كانت في المتجر إضافات شحن/دفع.
+
+**التوصيل حسب المدينة:** طريقة الشحن التي تسعّر حسب المدينة (إضافة `cityRateShipping`) تظهر في `/checkout/options` ومعها قائمة مدنها:
+
+```json
+{ "shippingMethods": [ { "id": "city-rate", "name": "Home delivery", "cities": ["طرابلس", "بنغازي", "سبها"] } ],
+  "paymentMethods": [ { "id": "cod", "name": "Cash on delivery" } ] }
+```
+
+- تبني الواجهة منها القائمة المنسدلة للمدن، وترسل المدينة المختارة في `shippingCity`.
+- المدينة غير المخدومة أو الناقصة تعطي 400، ويسرد `details` المدن المتاحة.
+- الطلب يحفظ المدينة في `shippingCity`.
 
 **حالات الطلب:** `pending` ← `confirmed` ← `shipped` ← `delivered`. ويمكن الإلغاء `cancelled` قبل الشحن فقط، والإلغاء يعيد الكميات إلى المخزون.
 
@@ -135,7 +148,7 @@
 استجابة إنشاء الطلب تتضمن `payment`: رسالة للمشتري (`instructions`) أو رابط صفحة دفع (`redirectUrl`).
 
 ```json
-{ "id": "…", "status": "pending", "subtotal": 72000, "shippingMethod": "flat-rate", "shippingCost": 10000,
+{ "id": "…", "status": "pending", "subtotal": 72000, "shippingCity": "طرابلس", "shippingMethod": "city-rate", "shippingCost": 10000,
   "total": 82000, "paymentMethod": "cod", "paymentStatus": "pending", "paymentReference": null,
   "contactName": "…", "contactPhone": "…", "shippingAddress": "…",
   "items": [ { "productId": "…", "productName": "…", "unitPrice": 18500, "quantity": 2, "lineTotal": 37000 } ],

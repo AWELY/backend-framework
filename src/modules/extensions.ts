@@ -15,11 +15,18 @@ export interface ShippingQuoteInput {
   /** Items total, smallest currency unit. */
   subtotal: number;
   shippingAddress: string;
+  /** Destination city as chosen by the buyer (from the provider's `cities` list, if it has one). */
+  shippingCity?: string;
 }
 
 export interface ShippingProvider {
   id: string;
   name: string;
+  /**
+   * Cities this method delivers to. When present, the storefront shows them as
+   * a drop-down and checkout requires one of them (see cityRateShipping).
+   */
+  cities?: string[];
   /** Shipping cost in the smallest currency unit. Runs inside the checkout transaction - keep it fast. */
   quote(input: ShippingQuoteInput): number | Promise<number>;
 }

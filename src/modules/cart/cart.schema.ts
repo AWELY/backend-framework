@@ -40,6 +40,7 @@ export const setItemSchema = {
 export interface CartLine {
   productId: string;
   name: string;
+  imageUrl: string | null;
   unitPrice: number;
   quantity: number;
   lineTotal: number;
