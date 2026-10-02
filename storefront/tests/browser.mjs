@@ -13,11 +13,17 @@ import { spawn, execSync } from "node:child_process";
 import { writeFileSync, mkdirSync, existsSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import dotenv from "dotenv";
+
+// OWNER_API_KEY (for the XSS probe product) comes from the environment or storefront/.env.
+dotenv.config({ quiet: true, path: join(import.meta.dirname, "..", ".env") });
+const OWNER_KEY = process.env.OWNER_API_KEY;
 
 const OUT = join(import.meta.dirname, "screenshots");
 mkdirSync(OUT, { recursive: true });
 const SITE = process.env.SITE ?? "http://localhost:5173";
-const API = `${new URL(SITE).protocol}//${new URL(SITE).hostname}:3000`;
+// API defaults to port 3000 on the website's host; set API=http://host:port to test another setup.
+const API = process.env.API ?? `${new URL(SITE).protocol}//${new URL(SITE).hostname}:3000`;
 
 function findBrowser() {
   if (process.env.BROWSER_PATH) return process.env.BROWSER_PATH;
@@ -82,6 +88,8 @@ const send = (method, params = {}) =>
 await send("Page.enable");
 await send("Runtime.enable");
 await send("Log.enable");
+// A non-default API address is handed to the website the same way a deployment would (window.AMA_API_BASE).
+if (process.env.API) await send("Page.addScriptToEvaluateOnNewDocument", { source: `window.AMA_API_BASE = ${JSON.stringify(API)};` });
 
 const evaluate = async (expr) => {
   const r = await send("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true });
@@ -224,8 +232,30 @@ try {
   await waitFor(`document.querySelectorAll(".card").length >= 16`, "mobile home");
   await shot("8-mobile", false);
 
-  // 10. Security: product with a script in its name must render as text
-  log(`XSS check: any <script> injected in cards? ${await evaluate(`document.querySelectorAll(".card script").length`)}`);
+  // 10. Security: a product whose NAME contains HTML must be shown as text, never run as markup.
+  // The probe product is created through the owner API and deleted again afterwards.
+  if (OWNER_KEY) {
+    const ownerHeaders = { "content-type": "application/json", "x-api-key": OWNER_KEY };
+    const created = await fetch(`${API}/products`, {
+      method: "POST",
+      headers: ownerHeaders,
+      body: JSON.stringify({ name: `<img src=x onerror="window.__xss=1">xss-probe`, slug: `xss-probe-${Date.now()}`, price: 1000 }),
+    });
+    if (created.status !== 201) throw new Error(`could not create the XSS probe product: HTTP ${created.status}`);
+    const probe = await created.json();
+    try {
+      await go("/index.html?q=xss-probe");
+      await waitFor(`document.querySelectorAll(".card").length === 1`, "XSS probe card");
+      const r = await evaluate(`({ markup: document.querySelectorAll(".card img[src='x'], .card script").length,
+        ran: window.__xss === 1, asText: document.querySelector(".card .name").textContent.includes("<img") })`);
+      log(`XSS check: markup injected=${r.markup}, script ran=${r.ran}, name shown as text=${r.asText}`);
+      if (r.markup || r.ran || !r.asText) throw new Error("XSS: a product name was rendered as HTML");
+    } finally {
+      await fetch(`${API}/products/${probe.id}`, { method: "DELETE", headers: ownerHeaders });
+    }
+  } else {
+    log("XSS check skipped: OWNER_API_KEY is not set (storefront/.env or environment)");
+  }
 } catch (err) {
   console.log("E2E FAILED:", err.message);
   await shot("failure", false).catch(() => {});

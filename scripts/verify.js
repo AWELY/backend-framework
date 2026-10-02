@@ -243,6 +243,15 @@ async function storefrontStep() {
     const secretProbe = await (await fetch(`${origin}/../.env`)).text();
     if (secretProbe.includes("OWNER_API_KEY")) throw new Error("the website server leaked .env");
 
+    // Every product's photo must actually be served by the website.
+    const products = await (await fetch(`${api.base}/products?limit=100`)).json();
+    for (const p of products) {
+      const img = await fetch(`${origin}${p.imageUrl}`);
+      if (img.status !== 200 || !(img.headers.get("content-type") ?? "").startsWith("image/")) {
+        throw new Error(`photo of ${p.slug} is missing: ${p.imageUrl} -> ${img.status}`);
+      }
+    }
+
     const options = await (await fetch(`${api.base}/checkout/options`)).json();
     const cityRate = options.shippingMethods.find((m) => m.id === "city-rate");
     if (!cityRate?.cities?.includes("تاجوراء")) throw new Error("city-based delivery (with Tajoura) is not configured");
@@ -256,12 +265,12 @@ async function storefrontStep() {
       throw new Error(`CORS preflight failed: ${preflight.status} ${preflight.headers.get("access-control-allow-origin")}`);
     }
 
-    const scripts = ["config", "store", "api", "ui", "order-view"]
+    const scripts = ["config", "store", "api", "ui", "icons", "order-view"]
       .map((f) => join(storeDir, "web", "js", `${f}.js`))
       .concat(["home", "product", "cart", "checkout", "account", "orders", "track"].map((f) => join(storeDir, "web", "js", "pages", `${f}.js`)));
     for (const file of scripts) run(process.execPath, ["--check", file], storeDir);
 
-    return `16 products seeded, 7 pages with CSP, ${cityRate.cities.length} delivery cities, CORS preflight OK, ${scripts.length} scripts valid`;
+    return `${products.length} products with photos, 7 pages with CSP, ${cityRate.cities.length} delivery cities, CORS preflight OK, ${scripts.length} scripts valid`;
   } finally {
     await stopServer(api);
     await stopServer(web);

@@ -1,5 +1,5 @@
 import { api, getExistingCart } from "../api.js";
-import { mountLayout, esc, money, errorText, toast, refreshCartBadge } from "../ui.js";
+import { mountLayout, esc, money, errorText, toast, refreshCartBadge, icon } from "../ui.js";
 
 mountLayout("cart");
 const app = document.getElementById("app");
@@ -8,7 +8,7 @@ async function render() {
   const cart = await getExistingCart();
   if (!cart || cart.items.length === 0) {
     app.innerHTML = `<h1 class="page-title">سلة التسوق</h1>
-      <div class="panel empty"><div class="big">سلتك فارغة</div><p>أضف منتجات من المتجر ثم عُد هنا.</p>
+      <div class="panel empty"><span class="empty-icon">${icon("cart", 40)}</span><div class="big">سلتك فارغة</div><p>أضف منتجات من المتجر ثم عُد هنا.</p>
       <a class="btn" href="index.html">تسوّق الآن</a></div>`;
     return;
   }
@@ -16,12 +16,12 @@ async function render() {
   const blocked = cart.items.some((i) => !i.available);
   const count = cart.items.reduce((sum, i) => sum + i.quantity, 0);
   app.innerHTML = `
-    <h1 class="page-title">سلة التسوق</h1>
+    <h1 class="page-title">سلة التسوق <span class="muted">(${count} قطعة)</span></h1>
     <div class="layout-2">
       <section class="panel">
         ${cart.items.map((i) => `
           <div class="cart-line">
-            <img src="${esc(i.imageUrl ?? "images/products/charger.svg")}" alt="${esc(i.name)}">
+            <img src="${esc(i.imageUrl ?? "images/placeholder.svg")}" alt="${esc(i.name)}">
             <div>
               <div class="row">
                 <a class="name" href="product.html?id=${encodeURIComponent(i.productId)}">${esc(i.name)}</a>
@@ -31,11 +31,11 @@ async function render() {
               ${i.available ? "" : `<div class="unavailable">هذا المنتج لم يعد متوفراً — احذفه للمتابعة</div>`}
               <div class="row">
                 <div class="qty">
-                  <button type="button" data-set="${esc(i.productId)}" data-to="${i.quantity + 1}" aria-label="زيادة">+</button>
+                  <button type="button" data-set="${esc(i.productId)}" data-to="${i.quantity + 1}" aria-label="زيادة">${icon("plus", 16)}</button>
                   <input type="number" value="${i.quantity}" readonly aria-label="الكمية">
-                  <button type="button" data-set="${esc(i.productId)}" data-to="${i.quantity - 1}" aria-label="إنقاص">−</button>
+                  <button type="button" data-set="${esc(i.productId)}" data-to="${i.quantity - 1}" aria-label="إنقاص">${icon("minus", 16)}</button>
                 </div>
-                <button class="link-btn" data-remove="${esc(i.productId)}">حذف</button>
+                <button class="link-btn" data-remove="${esc(i.productId)}">${icon("trash", 16)} حذف</button>
               </div>
             </div>
           </div>`).join("")}
@@ -46,8 +46,9 @@ async function render() {
         <div class="line"><span>المجموع</span><span>${money(cart.total)}</span></div>
         <div class="line muted"><span>التوصيل</span><span>يُحسب حسب المدينة</span></div>
         <div class="line total"><span>الإجمالي قبل التوصيل</span><span>${money(cart.total)}</span></div>
+        <p class="summary-note">${icon("cash", 16)} الدفع نقداً عند الاستلام</p>
         ${blocked ? `<div class="alert error">احذف المنتجات غير المتوفرة أولاً.</div>` : ""}
-        <a class="btn btn-block ${blocked ? "hidden" : ""}" href="checkout.html">إتمام الطلب</a>
+        <a class="btn btn-lg btn-block ${blocked ? "hidden" : ""}" href="checkout.html">إتمام الطلب</a>
         <a class="btn btn-light btn-block" href="index.html">متابعة التسوق</a>
       </aside>
     </div>`;

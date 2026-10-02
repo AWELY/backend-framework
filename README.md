@@ -23,6 +23,7 @@ tested against a real PostgreSQL 17 database:
 - CLI: `create <name>` scaffolds a working store project.
 - Tests: 77 unit + integration tests (`npm test`) + a real-browser test of the website.
 - Demo E-Commerce API: `examples/demo-store` (see its README).
+- **Project map** (`docs/PROJECT-MAP.md`, Arabic): where every feature, route, table and test lives.
 - **AMA storefront** (`storefront/`): a real Arabic e-commerce website (electronics &
   phone accessories, Tripoli - Tajoura) built on the framework - plain HTML/CSS/JS,
   city-based delivery, cash on delivery, guest and customer checkout. See `storefront/README.md`.

@@ -1,6 +1,6 @@
 import { api, getExistingCart, ApiError } from "../api.js";
 import { getToken, setCartId } from "../store.js";
-import { mountLayout, esc, money, errorText, refreshCartBadge } from "../ui.js";
+import { mountLayout, esc, money, errorText, refreshCartBadge, icon } from "../ui.js";
 
 mountLayout("checkout");
 const app = document.getElementById("app");
@@ -197,7 +197,8 @@ function showSuccess(order) {
   const trackUrl = `track.html?id=${encodeURIComponent(order.id)}&phone=${encodeURIComponent(order.contactPhone)}`;
   app.innerHTML = `
     <div class="panel narrow empty">
-      <div class="big">✅ تم استلام طلبك بنجاح</div>
+      <span class="success-icon">${icon("checkCircle", 56)}</span>
+      <div class="big">تم استلام طلبك بنجاح</div>
       <p>شكراً لك ${esc(order.contactName)}! سنتصل بك على <span class="ltr">${esc(order.contactPhone)}</span> لتأكيد الطلب.</p>
       <p>رقم الطلب:<br><span class="order-id">${esc(order.id)}</span></p>
       <p><b>الإجمالي: ${money(order.total)}</b>${order.shippingCity ? ` — التوصيل إلى ${esc(order.shippingCity)}` : ""}</p>

@@ -1,6 +1,11 @@
 import { STORE } from "./config.js";
 import { getCustomer } from "./store.js";
-import { getExistingCart } from "./api.js";
+import { api, getExistingCart, addToCart } from "./api.js";
+import { icon } from "./icons.js";
+
+export { icon };
+
+const PLACEHOLDER = "images/placeholder.svg";
 
 /** Escapes text before it goes into HTML - EVERY value from the API passes through this. */
 export function esc(value) {
@@ -17,6 +22,12 @@ export function money(dirhams) {
   const lyd = dirhams / 1000;
   const text = Number.isInteger(lyd) ? String(lyd) : lyd.toFixed(3).replace(/0+$/, "");
   return `${Number(text).toLocaleString("en-US", { maximumFractionDigits: 3 })} د.ل`;
+}
+
+/** The same price as HTML, with the currency set smaller than the amount. */
+export function priceHtml(dirhams) {
+  const [amount, currency] = money(dirhams).split(" ");
+  return `<span class="amount">${amount}</span> <span class="currency">${currency}</span>`;
 }
 
 export function stockBadge(quantity) {
@@ -121,49 +132,139 @@ export async function refreshCartBadge() {
   }
 }
 
-/** Header, footer and the common chrome, injected into every page. */
+let categoriesPromise;
+/** The category list, fetched once per page and shared by the header, footer and page. */
+export function getCategories() {
+  categoriesPromise ??= api("/categories").catch(() => []);
+  return categoriesPromise;
+}
+
+/** One product card - the same on the home page, search results and "similar products". */
+export function productCard(p, quantity, categoryName) {
+  const url = `product.html?id=${encodeURIComponent(p.id)}`;
+  const soldOut = quantity <= 0;
+  return `
+    <article class="card${soldOut ? " sold-out" : ""}">
+      <a class="thumb" href="${url}" tabindex="-1">
+        <img src="${esc(p.imageUrl ?? PLACEHOLDER)}" alt="${esc(p.name)}" loading="lazy">
+        ${quantity <= 3 ? stockBadge(quantity) : ""}
+      </a>
+      <div class="body">
+        ${categoryName ? `<span class="card-cat">${esc(categoryName)}</span>` : ""}
+        <a class="name" href="${url}">${esc(p.name)}</a>
+        <div class="price">${priceHtml(p.price)}</div>
+        <button class="add-btn" data-add="${esc(p.id)}" ${soldOut ? "disabled" : ""}>
+          ${soldOut ? "نفدت الكمية" : `${icon("cartPlus", 18)}<span>أضف إلى السلة</span>`}
+        </button>
+      </div>
+    </article>`;
+}
+
+/** Wires every [data-add] button inside root: adds one piece, then confirms on the button itself. */
+export function bindAddButtons(root) {
+  root.querySelectorAll("[data-add]").forEach((btn) =>
+    btn.addEventListener("click", async () => {
+      const original = btn.innerHTML;
+      btn.disabled = true;
+      try {
+        await addToCart(btn.dataset.add, 1);
+        btn.classList.add("added");
+        btn.innerHTML = `${icon("check", 18)}<span>تمت الإضافة</span>`;
+        toast("تمت الإضافة إلى السلة");
+        refreshCartBadge();
+        setTimeout(() => {
+          btn.classList.remove("added");
+          btn.innerHTML = original;
+        }, 1600);
+      } catch (err) {
+        toast(errorText(err), "error");
+      } finally {
+        btn.disabled = false;
+      }
+    })
+  );
+}
+
+/** Header, category bar, footer and the common chrome, injected into every page. */
 export function mountLayout(active) {
   const customer = getCustomer();
+  const accountHref = customer ? "orders.html" : "account.html";
+  const currentCategory = qs("category");
   const header = document.createElement("div");
   header.innerHTML = `
     <div class="topbar"><div class="container">
-      <span>🚚 <strong>توصيل لكل المدن الليبية</strong></span>
-      <span>💵 الدفع نقداً عند الاستلام</span>
-      <span>📍 ${esc(STORE.address)}</span>
+      <div class="topbar-group">
+        <span>${icon("truck", 16)} توصيل لكل المدن الليبية</span>
+        <span class="hide-sm">${icon("cash", 16)} الدفع نقداً عند الاستلام</span>
+      </div>
+      <div class="topbar-group">
+        <span>${icon("pin", 16)} ${esc(STORE.address)}</span>
+        <span class="hide-sm">${icon("clock", 16)} يومياً 10 ص - 10 م</span>
+      </div>
     </div></div>
     <header class="site-header"><div class="container">
       <a class="logo" href="index.html" aria-label="${esc(STORE.name)}"><img src="images/logo.svg" alt="${esc(STORE.name)}"></a>
       <form class="search" action="index.html" role="search">
-        <input name="q" type="search" placeholder="ابحث عن شاحن، سماعات، ساعة..." value="${esc(qs("q") ?? "")}">
-        <button type="submit">بحث</button>
+        <input name="q" type="search" placeholder="ابحث عن شاحن، سماعات، ساعة..." value="${esc(qs("q") ?? "")}" aria-label="بحث">
+        <button type="submit" aria-label="بحث">${icon("search", 20)}</button>
       </form>
       <nav class="nav">
-        <a href="track.html" class="${active === "track" ? "active" : ""}">📦 <span class="label">تتبّع طلبك</span></a>
-        <a href="${customer ? "orders.html" : "account.html"}" class="${active === "account" ? "active" : ""}">👤 <span class="label">${customer ? esc(customer.name) : "حسابي"}</span></a>
-        <a href="cart.html" class="cart-link">🛒 <span class="label">السلة</span> <span class="badge" data-cart-count>0</span></a>
+        <a href="track.html" class="${active === "track" ? "active" : ""}">${icon("package", 22)}<span class="label">تتبّع طلبك</span></a>
+        <a href="${accountHref}" class="${active === "account" ? "active" : ""}">${icon("user", 22)}<span class="label">${customer ? esc(customer.name) : "حسابي"}</span></a>
+        <a href="cart.html" class="cart-link ${active === "cart" ? "active" : ""}">${icon("cart", 22)}<span class="label">السلة</span><span class="badge" data-cart-count>0</span></a>
       </nav>
-    </div></header>`;
+    </div></header>
+    <nav class="catbar" aria-label="الأقسام"><div class="container" data-catbar>
+      <a href="index.html#products" class="${active === "home" && !currentCategory ? "active" : ""}">${icon("grid", 16)} كل المنتجات</a>
+    </div></nav>`;
   document.body.prepend(...header.children);
 
   const footer = document.createElement("footer");
   footer.className = "site-footer";
   footer.innerHTML = `
-    <div class="container">
-      <div><h4>${esc(STORE.name)}</h4><p>${esc(STORE.tagline)}. منتجات مختارة بأسعار مناسبة وتوصيل لكل ليبيا.</p></div>
-      <div><h4>روابط</h4>
-        <p><a href="index.html">الرئيسية</a><br><a href="track.html">تتبّع طلبك</a><br><a href="${customer ? "orders.html" : "account.html"}">حسابي</a></p></div>
-      <div><h4>تواصل معنا</h4><p>📍 ${esc(STORE.address)}<br>🕘 يومياً من 10 صباحاً حتى 10 مساءً</p></div>
+    <div class="container footer-grid">
+      <div class="footer-about">
+        <img src="images/logo-light.svg" alt="${esc(STORE.name)}" class="footer-logo">
+        <p>${esc(STORE.tagline)} في ${esc(STORE.address)}. منتجات مختارة بأسعار مناسبة، وتوصيل لكل ليبيا.</p>
+        <div class="footer-badges">
+          <span>${icon("cash", 16)} الدفع عند الاستلام</span>
+          <span>${icon("truck", 16)} توصيل لكل المدن</span>
+        </div>
+      </div>
+      <div><h4>الأقسام</h4><ul data-footer-cats></ul></div>
+      <div><h4>خدمة العملاء</h4><ul>
+        <li><a href="track.html">تتبّع طلبك</a></li>
+        <li><a href="${accountHref}">${customer ? "طلباتي" : "حسابي"}</a></li>
+        <li><a href="cart.html">سلة التسوق</a></li>
+      </ul></div>
+      <div><h4>تواصل معنا</h4><ul class="contact">
+        <li>${icon("pin", 16)} ${esc(STORE.address)}</li>
+        <li>${icon("clock", 16)} يومياً من 10 صباحاً حتى 10 مساءً</li>
+        ${STORE.whatsapp ? `<li>${icon("chat", 16)} <a class="ltr" href="https://wa.me/${encodeURIComponent(STORE.whatsapp)}" target="_blank" rel="noopener">+${esc(STORE.whatsapp)}</a></li>` : ""}
+      </ul></div>
     </div>
-    <div class="copy">© ${new Date().getFullYear()} ${esc(STORE.name)} — جميع الحقوق محفوظة</div>`;
+    <div class="footer-bottom"><div class="container">
+      <span>© ${new Date().getFullYear()} ${esc(STORE.name)} — جميع الحقوق محفوظة</span>
+      <span class="muted-light">صور المنتجات للعرض التوضيحي</span>
+    </div></div>`;
   document.body.append(footer);
+
+  getCategories().then((categories) => {
+    const bar = document.querySelector("[data-catbar]");
+    bar?.insertAdjacentHTML("beforeend", categories.map((c) =>
+      `<a href="index.html?category=${encodeURIComponent(c.id)}#products" class="${c.id === currentCategory ? "active" : ""}">${esc(c.name)}</a>`).join(""));
+    document.querySelector("[data-footer-cats]")?.insertAdjacentHTML("beforeend", categories.map((c) =>
+      `<li><a href="index.html?category=${encodeURIComponent(c.id)}#products">${esc(c.name)}</a></li>`).join(""));
+  });
 
   if (STORE.whatsapp) {
     const wa = document.createElement("a");
     wa.href = `https://wa.me/${encodeURIComponent(STORE.whatsapp)}`;
-    wa.className = "btn whatsapp";
+    wa.className = "whatsapp";
     wa.target = "_blank";
     wa.rel = "noopener";
-    wa.textContent = "واتساب";
+    wa.setAttribute("aria-label", "تواصل معنا على واتساب");
+    wa.innerHTML = `${icon("chat", 26)}`;
     document.body.append(wa);
   }
 

@@ -76,6 +76,7 @@ PASS  build (TypeScript)
 PASS  unit + integration tests
 PASS  CLI: create a store, install, migrate, start, call it
 PASS  demo store: migrate, seed, start, 16-step scenario
+PASS  AMA storefront: API + website
 ALL CHECKS PASSED
 ```
 

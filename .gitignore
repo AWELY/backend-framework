@@ -9,3 +9,6 @@ build-test/
 *.pdf
 # Office lock files
 ~$*
+
+# Proposal, report and slides stay local (the repo is code only)
+documents/
