@@ -1,3 +1,4 @@
+// اختبارات تكامل لحسابات الزبائن: التسجيل، والدخول، والملف الشخصي، والصلاحيات.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { startTestApp, api, type TestApp } from "../helpers/test-app";
@@ -10,8 +11,10 @@ after(async () => {
   await t.close();
 });
 
+// البريد بحروف كبيرة عمداً، لنختبر أنه يُوحَّد إلى حروف صغيرة.
 const account = { email: "Sara@Example.com", password: "a-long-password", name: "Sara", phone: "+218 91 234 5678" };
 
+// التسجيل يرجع الزبون وتوكناً، ولا يرجع الـ hash أبداً (بأي اسم). وفي القاعدة نفسها: hash بصيغة scrypt.
 test("register returns the customer (never the password hash) and a token", async () => {
   const res = await api(t.base, "POST", "/customers/register", { body: account });
   assert.equal(res.status, 201);
@@ -24,11 +27,13 @@ test("register returns the customer (never the password hash) and a token", asyn
   assert.ok(rows[0].password_hash.startsWith("scrypt$"));
 });
 
+// نفس البريد بحالة حروف مختلفة: مرفوض (409)، بفضل الفهرس الفريد على lower(email).
 test("email is unique regardless of case", async () => {
   const dup = await api(t.base, "POST", "/customers/register", { body: { ...account, email: "SARA@example.COM" } });
   assert.equal(dup.status, 409);
 });
 
+// بريد خاطئ، وكلمة مرور قصيرة، واسم فارغ: 400 مع الحقول الثلاثة معاً.
 test("weak input is rejected", async () => {
   const res = await api(t.base, "POST", "/customers/register", {
     body: { email: "not-an-email", password: "short", name: "" },
@@ -37,6 +42,8 @@ test("weak input is rejected", async () => {
   assert.deepEqual(res.body.error.details.map((d: { field: string }) => d.field).sort(), ["email", "name", "password"]);
 });
 
+// كلمة المرور الصحيحة تعطي توكناً. والخاطئة والبريد غير المسجل يعطيان نفس الرد 401 حرفياً،
+// فلا يعرف المهاجم أي البريدات مسجلة.
 test("login: right password works; wrong password and unknown email give the SAME 401", async () => {
   const ok = await api(t.base, "POST", "/customers/login", { body: { email: "sara@example.com", password: account.password } });
   assert.equal(ok.status, 200);
@@ -49,6 +56,8 @@ test("login: right password works; wrong password and unknown email give the SAM
   assert.deepEqual(wrongPw.body, noUser.body);
 });
 
+// /customers/me: بلا توكن 401، وتوكن معدّل (حرف زائد) 401، وبالتوكن الصحيح يرى ملفه.
+// تعديل الاسم مسموح، وتعديل البريد مرفوض (ليس في profileSchema). وقائمة الزبائن للمالك فقط (الزبون 403).
 test("/customers/me with a token; profile update; owner-only customer list", async () => {
   const { body } = await api(t.base, "POST", "/customers/login", { body: { email: "sara@example.com", password: account.password } });
   const token = body.token as string;
@@ -62,7 +71,7 @@ test("/customers/me with a token; profile update; owner-only customer list", asy
 
   const updated = await api(t.base, "PATCH", "/customers/me", { token, body: { name: "Sara A." } });
   assert.equal(updated.body.name, "Sara A.");
-  // Cannot change email or smuggle other fields through the profile endpoint.
+  // لا يمكن تغيير البريد، ولا دسّ حقول أخرى، عبر مسار الملف الشخصي.
   assert.equal((await api(t.base, "PATCH", "/customers/me", { token, body: { email: "x@y.z" } })).status, 400);
 
   assert.equal((await api(t.base, "GET", "/customers", { token })).status, 403);

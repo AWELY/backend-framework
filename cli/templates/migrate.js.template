@@ -1,8 +1,8 @@
 require("dotenv").config({ quiet: true });
 const { loadConfig, Logger, createCommerceApp } = require("commerce-framework");
 
-// Creates or updates this store's tables. Safe to run again: already-applied
-// migrations are skipped.
+// ينشئ جداول هذا المتجر أو يحدّثها. تشغيله مرة ثانية آمن: الـ migrations المطبّقة
+// من قبل تُتجاوز.
 async function main() {
   const config = loadConfig();
   const app = createCommerceApp({

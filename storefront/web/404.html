@@ -8,6 +8,12 @@
   <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
+  <!--
+    صفحة "غير موجودة". يرسلها web-server.js برمز 404 لأي ملف غير موجود، مهما كان عمق الرابط.
+    لهذا روابطها تبدأ بـ "/" (مثل /css/styles.css) وليست نسبية: لو طُلب /a/b/c، لبحث الرابط
+    النسبي css/styles.css في /a/b/css/ ولم يجده. وهي صفحة ثابتة بلا سكربت ولا اتصال بالـ API.
+  -->
+
   <main class="container">
     <div class="empty">
       <div class="big">الصفحة غير موجودة</div>

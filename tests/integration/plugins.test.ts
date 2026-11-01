@@ -1,3 +1,5 @@
+// اختبارات تكامل لنظام الإضافات: يثبت أن الإطار يتوسع دون تعديل كوده. كل الإضافات هنا مكتوبة
+// فقط بالواجهة العامة (src/index.ts)، كما يكتبها أي مطور من خارج الفريق.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { startTestApp, api, type TestApp } from "../helpers/test-app";
@@ -11,10 +13,12 @@ import {
 } from "../../src/index";
 
 /**
- * A stand-in for a real online payment gateway, written ONLY against the
- * public plugin API: it offers a payment method that returns a redirect URL,
- * and adds its own webhook route that the "gateway" calls when payment
- * succeeds. A real local gateway plugin has exactly this shape.
+ * بديل تجريبي لبوابة دفع إلكتروني حقيقية، مكتوب فقط بواجهة الإضافات العامة:
+ *   1. يقدم طريقة دفع ترجع رابط تحويل (redirectUrl) إلى صفحة الدفع الخارجية.
+ *   2. يضيف مسار webhook خاصاً به، تستدعيه "البوابة" عندما ينجح الدفع، فيسجل الدفع عبر
+ *      ORDERS_SERVICE من الحاوية.
+ * إضافة بوابة دفع ليبية حقيقية سيكون لها هذا الشكل بالضبط. والتحقق من التوقيع هنا مبسط
+ * (نص ثابت)، أما البوابة الحقيقية فتوقّع رسائلها بسر مشترك.
  */
 function mockGateway(): CommercePlugin {
   return {
@@ -39,6 +43,7 @@ function mockGateway(): CommercePlugin {
   };
 }
 
+/** بوابة معطوبة: ترمي خطأ دائماً، لنختبر أن فشل الدفع لا يضيّع الطلب. */
 function brokenGateway(): CommercePlugin {
   return {
     name: "broken-gateway",
@@ -54,8 +59,13 @@ function brokenGateway(): CommercePlugin {
   };
 }
 
+// الأحداث التي سجلها المستمع، لنتأكد منها في الاختبارات.
 const events: Array<{ name: string; order: Order }> = [];
 
+/**
+ * إضافة تستمع للأحداث وتسجلها. ومعها مستمع ثالث معطوب عمداً (يرمي خطأ)، لنثبت أن المستمع
+ * المعطوب لا يكسر عملية الشراء.
+ */
 function eventRecorder(): CommercePlugin {
   return {
     name: "event-recorder",
@@ -69,6 +79,8 @@ function eventRecorder(): CommercePlugin {
   };
 }
 
+// متجر بست إضافات: شحن عادي (10000، ومجاني فوق 100000)، وشحن سريع (25000)، والدفع عند
+// الاستلام، والبوابتان، ومسجل الأحداث.
 let t: TestApp;
 before(async () => {
   t = await startTestApp({
@@ -88,6 +100,7 @@ after(async () => {
 
 const contact = { contactName: "Huda", contactPhone: "0925556677", shippingAddress: "Misrata, Tripoli Street" };
 
+/** سلة فيها منتج جديد (باسم عشوائي) بالسعر والكمية المعطاة، ويرجع رقمها. */
 async function cartWith(price: number, quantity: number): Promise<string> {
   const slug = `p-${Math.random().toString(36).slice(2, 10)}`;
   const p = await api(t.base, "POST", "/products", { owner: true, body: { name: slug, slug, price } });
@@ -97,12 +110,14 @@ async function cartWith(price: number, quantity: number): Promise<string> {
   return cartId;
 }
 
+// خيارات الشراء هي ما سجلته الإضافات، بترتيب تسجيلها.
 test("checkout options list what the installed plugins offer", async () => {
   const res = await api(t.base, "GET", "/checkout/options");
   assert.deepEqual(res.body.shippingMethods.map((m: { id: string }) => m.id), ["flat-rate", "express"]);
   assert.deepEqual(res.body.paymentMethods.map((m: { id: string }) => m.id), ["cod", "mockpay", "broken"]);
 });
 
+// التسعير يطبق قاعدة الإضافة: 20000 + 10000 شحن. وفوق 100000 الشحن العادي مجاني، والسريع يبقى 25000.
 test("quote applies the shipping plugin's rule (free over the threshold)", async () => {
   const small = await cartWith(20000, 1);
   const q1 = await api(t.base, "POST", "/checkout/quote", { body: { cartId: small, shippingAddress: "Tripoli", shippingMethod: "flat-rate" } });
@@ -115,6 +130,8 @@ test("quote applies the shipping plugin's rule (free over the threshold)", async
   assert.equal(q3.body.shippingCost, 25000);
 });
 
+// بوجود إضافات، طريقتا الشحن والدفع إلزاميتان (بدونهما 400)، والطريقة غير المعروفة 400
+// مع قائمة المتاح في الرسالة.
 test("with plugins installed, shipping and payment methods are required and validated", async () => {
   const cartId = await cartWith(1000, 1);
   const missing = await api(t.base, "POST", "/orders", { body: { cartId, ...contact } });
@@ -126,6 +143,7 @@ test("with plugins installed, shipping and payment methods are required and vali
   assert.match(unknown.body.error.details[0].message, /flat-rate, express/);
 });
 
+// الدفع عند الاستلام: الشحن يُضاف للإجمالي، والدفع pending مع تعليمات، ثم المالك يسجله paid.
 test("cash on delivery: shipping added to total, payment pending with instructions, owner marks paid", async () => {
   const cartId = await cartWith(20000, 1);
   const res = await api(t.base, "POST", "/orders", {
@@ -143,6 +161,8 @@ test("cash on delivery: shipping added to total, payment pending with instructio
   assert.equal(paid.body.paymentStatus, "paid");
 });
 
+// البوابة الإلكترونية: رابط تحويل عند الشراء، ورقم عملية. Webhook بتوقيع مزور يُرفض (400)،
+// وبالتوقيع الصحيح يسجل الدفع paid ويُطلق الحدث paymentChanged.
 test("online gateway plugin: redirect URL on checkout, webhook route marks the order paid", async () => {
   const cartId = await cartWith(5000, 1);
   const res = await api(t.base, "POST", "/orders", {
@@ -158,6 +178,7 @@ test("online gateway plugin: redirect URL on checkout, webhook route marks the o
   assert.ok(events.some((e) => e.name === "paymentChanged" && e.order.id === res.body.id));
 });
 
+// البوابة المعطوبة لا تضيّع الطلب: يُحفظ (201) بحالة دفع failed، ويمكن قراءته.
 test("a failing payment plugin does not lose the order: it is saved with paymentStatus 'failed'", async () => {
   const cartId = await cartWith(3000, 1);
   const res = await api(t.base, "POST", "/orders", {
@@ -168,6 +189,7 @@ test("a failing payment plugin does not lose the order: it is saved with payment
   assert.equal((await api(t.base, "GET", `/orders/${res.body.id}`, { owner: true })).status, 200);
 });
 
+// المستمعون يعملون بعد الشراء، والمستمع الذي يرمي خطأ لا يكسر الشراء (201).
 test("event listeners run after checkout, and a throwing listener does not break it", async () => {
   const cartId = await cartWith(1000, 1);
   const res = await api(t.base, "POST", "/orders", {
@@ -177,6 +199,7 @@ test("event listeners run after checkout, and a throwing listener does not break
   assert.ok(events.some((e) => e.name === "created" && e.order.id === res.body.id));
 });
 
+// تسجيل طريقة دفع بمعرّف موجود ("cod") يُرفض فوراً بخطأ.
 test("duplicate provider ids are rejected at startup", () => {
   assert.throws(() => t.app.extensions.addPaymentProvider({ id: "cod", name: "dup", initiate: () => ({ status: "pending" }) }));
 });

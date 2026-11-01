@@ -17,64 +17,89 @@ import { ExtensionRegistry } from "./modules/extensions";
 import { FailureLimiter, type LimiterOptions } from "./engine/rate-limiter";
 import { clientIp } from "./engine/http/client-ip";
 
+/** الخيارات التي يمررها المتجر إلى createCommerceApp. الإلزامي منها ثلاثة فقط. */
 export interface CommerceAppOptions {
+  /** رابط قاعدة البيانات (إلزامي). */
   databaseUrl: string;
+  /** مفتاح المالك (إلزامي). */
   ownerApiKey: string;
-  /** Signs customer login tokens. */
+  /** سر توقيع توكنات دخول الزبائن (إلزامي). */
   authTokenSecret: string;
-  /** How long a customer login token stays valid. Default: 7 days. */
+  /** كم تبقى صلاحية توكن الدخول بالثواني. الافتراضي 7 أيام. */
   tokenTtlSeconds?: number;
+  /** الموقع المسموح له باستدعاء الـ API من المتصفح. الافتراضي "*". */
   corsOrigin?: string;
   logger?: Logger;
-  /** Defaults to every built-in module. */
+  /** الوحدات المستخدمة. الافتراضي كل الوحدات الست المدمجة. */
   modules?: CommerceModule[];
-  /** Set up after all modules, e.g. [cashOnDelivery(), flatRateShipping({ rate: 10000 })]. */
+  /** الإضافات، وتُهيَّأ بعد كل الوحدات. مثال: [cashOnDelivery(), flatRateShipping({ rate: 10000 })] */
   plugins?: CommercePlugin[];
+  /** جدول صلاحيات خاص بالمتجر. الافتراضي DEFAULT_ROLES. */
   accessControl?: AccessControl;
   /**
-   * Failed-login limit, per IP and per email. Default: 10 failures per 15 minutes.
-   * `false` turns it off (not recommended outside tests/benchmarks).
+   * حد محاولات الدخول الفاشلة، لكل عنوان IP ولكل بريد. الافتراضي 10 كل 15 دقيقة.
+   * القيمة false تطفئه (غير موصى بها إلا في الاختبارات وقياس الأداء).
    */
   loginRateLimit?: Pick<LimiterOptions, "maxFailures" | "windowSeconds"> | false;
   /**
-   * Account registrations per IP (every attempt that reaches password hashing).
-   * Default: 5 per hour. `false` turns it off.
+   * حد إنشاء الحسابات لكل عنوان IP (كل محاولة تصل إلى حساب hash كلمة المرور).
+   * الافتراضي 5 في الساعة. القيمة false تطفئه.
    */
   registrationRateLimit?: Pick<LimiterOptions, "maxFailures" | "windowSeconds"> | false;
-  /** Read the client IP from X-Forwarded-For. Only when behind ONE trusted reverse proxy. */
+  /** قراءة عنوان العميل من X-Forwarded-For. فقط خلف Reverse proxy واحد موثوق. */
   trustProxy?: boolean;
 }
 
+/** ما يحصل عليه المتجر: التطبيق جاهزاً، مع أدوات تشغيله. */
 export interface CommerceApp {
+  /** خادم HTTP من Node (لم يبدأ الاستماع بعد). */
   server: Server;
+  /** متاح ليضيف المتجر مسارات خاصة به. */
   router: Router;
   container: Container;
   pool: Pool;
   logger: Logger;
   extensions: ExtensionRegistry;
-  /** Applies any migrations of the registered modules that are not applied yet. */
+  /** يطبّق migrations الوحدات والإضافات التي لم تُطبَّق بعد، ويرجع أرقامها. */
   migrate(): Promise<string[]>;
+  /** يبدأ الاستماع على المنفذ. */
   listen(port: number): Promise<void>;
+  /** يغلق الخادم (بعد انتهاء الطلبات الجارية)، ثم اتصالات القاعدة. */
   close(): Promise<void>;
 }
 
 /**
- * The one call a store project needs: builds the pool, DI container, router,
- * auth and every module, and returns a server ready to listen. This is what
- * makes "a working store API in a few lines" true for generated projects.
+ * الاستدعاء الوحيد الذي يحتاجه مشروع المتجر: يبني مجموعة الاتصالات، وحاوية الـ DI،
+ * والـ Router، والمصادقة، وكل الوحدات والإضافات، ويرجع خادماً جاهزاً للاستماع.
+ * هذا ما يجعل "API متجر كامل في أسطر قليلة" حقيقياً في المشاريع التي تنشئها أداة CLI.
+ *
+ * اسمها في التصميم: نقطة التجميع (Composition root). المكان الوحيد الذي تُركَّب فيه
+ * كل قطع الإطار معاً، وكل قطعة أخرى تستلم ما تحتاجه من هنا ولا تنشئه بنفسها.
+ *
+ * تستخدمها خمسة أماكن بإعدادات مختلفة: خادم التطوير (dev-server.ts)، ومتجر AMA،
+ * والمتجر التجريبي، وقالب أداة CLI، والاختبارات.
  */
 export function createCommerceApp(options: CommerceAppOptions): CommerceApp {
+  // 1. الأدوات الأساسية، بقيم افتراضية لما لم يُمرَّر.
   const logger = options.logger ?? new Logger("info");
   const modules = options.modules ?? coreModules;
   const plugins = options.plugins ?? [];
+
+  // 2. مجموعة الاتصالات الوحيدة بالقاعدة (لا تتصل الآن، بل عند أول استعلام).
   const pool = createPool(options.databaseUrl);
+
+  // 3. هياكل فارغة، تملؤها الوحدات والإضافات بعد قليل.
   const container = new Container();
   const router = new Router();
   const accessControl = options.accessControl ?? new AccessControl();
   const extensions = new ExtensionRegistry(logger);
 
+  // 4. المصادقة: معالجان، required و optional.
   const auth = createAuthenticator({ ownerApiKey: options.ownerApiKey, tokenSecret: options.authTokenSecret });
+  // 7 أيام بالثواني: 7 × 24 ساعة × 60 دقيقة × 60 ثانية.
   const tokenTtl = options.tokenTtlSeconds ?? 7 * 24 * 60 * 60;
+
+  // 5. عدّادا حد المحاولات (في الذاكرة)، أو null إن أطفأهما المتجر بـ false.
   const loginLimiter =
     options.loginRateLimit === false
       ? null
@@ -85,6 +110,7 @@ export function createCommerceApp(options: CommerceAppOptions): CommerceApp {
       : new FailureLimiter(options.registrationRateLimit ?? { maxFailures: 5, windowSeconds: 60 * 60 });
   const trustProxy = options.trustProxy ?? false;
 
+  // 6. صندوق الأدوات الذي تستلمه كل وحدة وكل إضافة.
   const context: ModuleContext = {
     router,
     container,
@@ -93,6 +119,7 @@ export function createCommerceApp(options: CommerceAppOptions): CommerceApp {
     logger,
     authenticate: auth.required,
     authenticateOptional: auth.optional,
+    // الوحدات تستطيع إصدار توكن، لكنها لا ترى السر: الدالة تتذكره داخلياً (Closure).
     issueCustomerToken: (customerId) =>
       signToken({ sub: customerId, role: "customer" }, options.authTokenSecret, tokenTtl),
     extensions,
@@ -101,23 +128,28 @@ export function createCommerceApp(options: CommerceAppOptions): CommerceApp {
     clientIp: (req) => clientIp(req, trustProxy),
   };
 
+  // 7. فحص الحالة: الخادم يعمل، والقاعدة ترد. أول مسار يُسجَّل، وهو من الإطار نفسه.
   router.get("/health", async (_req, res) => {
     await pingDatabase(pool);
     res.json({ status: "ok", database: "ok" });
   });
 
+  // 8. الوحدات، بترتيب الاعتماد (modules/index.ts): كل وحدة تسجّل خدماتها ومساراتها.
   for (const module of modules) module.register(context);
-  // Plugins come last so they can use any module's services and routes.
+  // 9. الإضافات أخيراً، لتستطيع استخدام خدمات أي وحدة ومساراتها.
   for (const plugin of plugins) plugin.setup(context);
 
+  // 10. نجمع migrations الوحدات والإضافات في قائمة واحدة. لا تُنفَّذ الآن، بل عند migrate().
   const migrations = [...collectMigrations(modules), ...plugins.flatMap((p) => p.migrations ?? [])];
 
+  // 11. خادم HTTP، مع المعالجات العامة التي تعمل على كل طلب قبل أي شيء: cors ثم requestLogger.
   const server = createServer({
     router,
     globalMiddleware: [cors(options.corsOrigin ?? "*"), requestLogger(logger)],
     logger,
   });
 
+  // 12. التطبيق جاهز، لكنه لا يستمع بعد. المتجر يقرر متى يستدعي listen.
   return {
     server,
     router,
@@ -126,7 +158,9 @@ export function createCommerceApp(options: CommerceAppOptions): CommerceApp {
     logger,
     extensions,
     migrate: () => runMigrations(pool, migrations, (m) => logger.info(m)),
-    // A busy port rejects the promise (instead of crashing with an unhandled 'error' event).
+    // المنفذ المشغول يجعل الوعد يُرفض برسالة واضحة، بدل أن ينهار البرنامج بخطأ 'error'
+    // غير ملتقط (الخطأ رقم 3 في جدول 6.5).
+    // server.once: المستمع يعمل مرة واحدة. وبعد نجاح الاستماع نزيله بـ server.off، فمهمته انتهت.
     listen: (port) =>
       new Promise((resolve, reject) => {
         server.once("error", reject);
@@ -135,6 +169,7 @@ export function createCommerceApp(options: CommerceAppOptions): CommerceApp {
           resolve();
         });
       }),
+    // الإغلاق بالترتيب: الخادم أولاً (لا طلبات جديدة، وينتظر الجارية)، ثم اتصالات القاعدة.
     close: async () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await pool.end();

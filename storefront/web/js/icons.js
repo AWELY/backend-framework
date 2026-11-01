@@ -1,6 +1,8 @@
-// Line icons drawn as inline SVG (24x24, stroke = current text colour), so they look
-// the same on every device - unlike emoji. No attributes named "style", so the
-// page's Content-Security-Policy stays strict.
+// أيقونات خطية مرسومة كـ SVG داخل الصفحة (24×24، ولون الخط هو لون النص الحالي currentColor)،
+// فتظهر بنفس الشكل على كل جهاز، بعكس الرموز التعبيرية (emoji) التي يختلف شكلها بين الأنظمة.
+// لا تحتوي أي خاصية باسم "style"، فتبقى سياسة أمان المحتوى (CSP) صارمة كما هي.
+//
+// كل مفتاح اسم أيقونة، وقيمته أشكال SVG (path و circle و rect) التي ترسمها.
 const PATHS = {
   truck: `<path d="M1 5h13v11H1z"/><path d="M14 9h4.5l3.5 3.5V16h-8"/><circle cx="5.5" cy="18" r="2"/><circle cx="17.5" cy="18" r="2"/>`,
   cash: `<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v4M18 10v4"/>`,
@@ -24,6 +26,11 @@ const PATHS = {
   chat: `<path d="M3 21l1.8-5.2A8.5 8.5 0 1 1 8.2 19.3z"/>`,
 };
 
+/**
+ * يرجع أيقونة كنص HTML جاهز للإدراج في الصفحة، مثل icon("cart", 22).
+ * aria-hidden="true": قارئ الشاشة للمكفوفين يتجاهل الأيقونة، لأن النص بجانبها يكفي.
+ * اسم غير معروف يعطي SVG فارغاً بدل خطأ.
+ */
 export function icon(name, size = 20) {
   return `<svg class="icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PATHS[name] ?? ""}</svg>`;
 }

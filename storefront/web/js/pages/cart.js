@@ -1,10 +1,15 @@
+// صفحة السلة (cart.html): سطور السلة، وتغيير الكميات، والحذف، وملخص الطلب.
+// كل الأسعار والمجاميع تأتي من الـ API كما هي: الموقع لا يحسب أي سعر بنفسه، لأن المتصفح
+// بيد المستخدم ويمكن التلاعب به، والخادم هو المرجع.
 import { api, getExistingCart } from "../api.js";
 import { mountLayout, esc, money, errorText, toast, refreshCartBadge, icon } from "../ui.js";
 
 mountLayout("cart");
 const app = document.getElementById("app");
 
+/** يرسم السلة. يُستدعى أول مرة، ثم بعد كل تعديل ليعرض ما رد به الخادم. */
 async function render() {
+  // getExistingCart لا تنشئ سلة: زيارة صفحة السلة لا تنشئ سلة فارغة.
   const cart = await getExistingCart();
   if (!cart || cart.items.length === 0) {
     app.innerHTML = `<h1 class="page-title">سلة التسوق</h1>
@@ -13,8 +18,10 @@ async function render() {
     return;
   }
 
+  // منتج أُخفي بعد إضافته (available = false) يمنع إتمام الطلب حتى يُحذف، لأن الخادم سيرفضه.
   const blocked = cart.items.some((i) => !i.available);
   const count = cart.items.reduce((sum, i) => sum + i.quantity, 0);
+  // أزرار + و - تحمل الكمية الجديدة جاهزة في data-to، و data-set فيه رقم المنتج.
   app.innerHTML = `
     <h1 class="page-title">سلة التسوق <span class="muted">(${count} قطعة)</span></h1>
     <div class="layout-2">
@@ -53,6 +60,10 @@ async function render() {
       </aside>
     </div>`;
 
+  /**
+   * يغيّر كمية سطر: 0 أو أقل تحذفه (DELETE)، وغير ذلك يضبطه (PUT). ثم نعيد رسم السلة
+   * من رد الخادم. إن رفض الخادم (مثلاً المخزون لا يكفي)، تظهر رسالة ولا يتغير شيء.
+   */
   const update = async (productId, quantity) => {
     try {
       if (quantity <= 0) await api(`/carts/${cart.id}/items/${encodeURIComponent(productId)}`, { method: "DELETE" });

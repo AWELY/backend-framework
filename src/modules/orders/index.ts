@@ -21,19 +21,23 @@ import { OrdersRepository, ORDERS_REPOSITORY } from "./orders.repository";
 import { OrdersService, ORDERS_SERVICE } from "./orders.service";
 
 /**
- * Orders - guest AND customer checkout.
+ * وحدة الطلبات: إتمام الشراء للضيف وللزبون المسجل.
  *
- *   POST  /orders                 guest or customer    body { cartId, contactName, contactPhone, shippingAddress }
- *   GET   /orders?status=         owner: all orders; customer: their own
- *   GET   /orders/:id             owner; the customer who placed it; or a guest with ?phone=<the order's phone>
- *   PATCH /orders/:id/status      orders:write (owner)   body { status }
- *   PATCH /orders/:id/payment     orders:write (owner)   body { status, reference? }
- *   GET   /checkout/options       public   -> shipping and payment methods offered by installed plugins
- *   POST  /checkout/quote         cart holder   body { cartId, shippingAddress, shippingCity?, shippingMethod? } -> totals
+ * المسارات:
+ *   POST  /orders                 ضيف أو زبون. الجسم { cartId, contactName, contactPhone, shippingAddress, ... }
+ *   GET   /orders?status=         المالك: كل الطلبات. الزبون: طلباته فقط
+ *   GET   /orders/:id             المالك، أو الزبون صاحب الطلب، أو ضيف يرسل ?phone=<هاتف الطلب>
+ *   PATCH /orders/:id/status      orders:write (المالك)، بجسم { status }
+ *   PATCH /orders/:id/payment     orders:write (المالك)، بجسم { status, reference? }
+ *   GET   /checkout/options       عام: طرق الشحن والدفع التي تقدمها الإضافات المثبتة
+ *   POST  /checkout/quote         من يملك السلة. الجسم { cartId, shippingAddress, shippingCity?, shippingMethod? }،
+ *                                 والرد الإجماليات
  *
- * Amounts are integers in the smallest currency unit. Shipping and payment
- * methods come from plugins (Plugin/Extension System); with none installed,
- * shipping is free and no payment step runs.
+ * المبالغ أرقام صحيحة بأصغر وحدة للعملة (الدرهم). طرق الشحن والدفع تأتي من الإضافات
+ * (نظام التوسعة). بلا إضافات: الشحن مجاني، ولا توجد خطوة دفع.
+ *
+ * المنطق المعقد (إتمام الشراء، وتغيير الحالة، والدفع) في orders.service.ts، وهذا الملف
+ * يربطه بالمسارات ويفحص من يحق له ماذا.
  */
 export const ordersModule: CommerceModule = {
   name: "orders",
@@ -41,13 +45,22 @@ export const ordersModule: CommerceModule = {
 
   register({ router, container, pool, accessControl, authenticate, authenticateOptional, extensions, logger }) {
     container.register(ORDERS_REPOSITORY, () => new OrdersRepository(pool));
+    // الخدمة تحتاج أدوات أكثر: المجموعة، والصلاحيات، والإضافات، والسجل.
     container.register(ORDERS_SERVICE, () => new OrdersService(pool, accessControl, extensions, logger));
     const orders = () => container.resolve(ORDERS_REPOSITORY);
     const service = () => container.resolve(ORDERS_SERVICE);
 
+    // يحذف كل ما ليس رقماً: "+218 91-234 5678" يصبح "218912345678". يسمح بمقارنة هاتفين
+    // كُتبا بأشكال مختلفة.
     const digits = (phone: string) => phone.replace(/\D/g, "");
 
-    /** Owner sees any order; a customer only theirs; a guest only with the matching phone number. */
+    /**
+     * من يرى الطلب؟
+     *   - المالك: أي طلب (صلاحية orders:read-all، وعنده "*").
+     *   - الزبون: طلباته فقط.
+     *   - الضيف: فقط إن أرسل رقم الهاتف المسجل في الطلب (?phone=)، مع رقم الطلب نفسه.
+     * رقم الطلب UUID لا يُخمَّن، والهاتف شرط ثانٍ، فلا يستطيع أحد رؤية طلبات غيره.
+     */
     function canView(req: AppRequest, order: Order): boolean {
       if (accessControl.can(req.auth?.role, "orders:read-all")) return true;
       if (req.auth?.role === "customer") return order.customerId !== null && order.customerId === req.auth.userId;
@@ -55,14 +68,19 @@ export const ordersModule: CommerceModule = {
       return phone !== null && digits(phone).length > 0 && digits(phone) === digits(order.contactPhone);
     }
 
+    // إتمام الشراء. الضيف مسموح (authenticateOptional). المرسل المعروف يجب أن يملك orders:create.
+    // الرد 201 بالطلب ومعه نتيجة الدفع (تعليمات الدفع عند الاستلام مثلاً).
     router.post("/orders", authenticateOptional, validateBody(checkoutSchema), async (req, res) => {
       if (req.auth && !accessControl.can(req.auth.role, "orders:create")) {
         throw new ForbiddenError("Missing permission: orders:create");
       }
       const { order, payment } = await service().checkout(req, req.body as CheckoutInput);
+      // "...order" تنسخ كل حقول الطلب إلى الرد، ثم نضيف payment.
       res.status(201).json({ ...order, payment });
     });
 
+    // ما تعرضه صفحة إتمام الشراء: طرق الشحن (ومدنها إن وُجدت) وطرق الدفع من الإضافات.
+    // "...(شرط ? { cities } : {})" تضيف الحقل cities فقط إن كانت للطريقة قائمة مدن.
     router.get("/checkout/options", (_req, res) => {
       res.json({
         shippingMethods: extensions
@@ -72,19 +90,24 @@ export const ordersModule: CommerceModule = {
       });
     });
 
+    // التسعير قبل الشراء (بلا أي أثر جانبي).
     router.post("/checkout/quote", authenticateOptional, validateBody(quoteSchema), async (req, res) => {
       res.json(await service().quote(req, req.body as QuoteInput));
     });
 
+    // قائمة الطلبات. يتطلب دخولاً. الحالة في ?status= تُقبل فقط إن كانت من الحالات الخمس،
+    // وإلا تُتجاهل.
     router.get("/orders", authenticate, async (req, res) => {
       const { limit, offset } = parsePagination(req.query);
       const statusParam = req.query.get("status");
       const status = statusParam && (ORDER_STATUSES as readonly string[]).includes(statusParam) ? statusParam : undefined;
 
+      // المالك: كل الطلبات.
       if (accessControl.can(req.auth?.role, "orders:read-all")) {
         res.json(await orders().list({ status, limit, offset }));
         return;
       }
+      // الزبون: طلباته فقط، والتصفية برقمه من التوكن، لا من الطلب.
       if (req.auth?.role === "customer" && req.auth.userId && accessControl.can(req.auth.role, "orders:read-own")) {
         res.json(await orders().list({ customerId: req.auth.userId, status, limit, offset }));
         return;
@@ -92,13 +115,15 @@ export const ordersModule: CommerceModule = {
       throw new ForbiddenError("Missing permission: orders:read-own");
     });
 
+    // طلب واحد (صفحة تتبع الطلب في الموقع تستخدمه).
     router.get("/orders/:id", authenticateOptional, async (req, res) => {
       const order = await orders().findById(req.params.id as string);
-      // 404 (not 403) for someone else's order, so order ids cannot be probed.
+      // 404 وليس 403 لطلب شخص آخر، فلا يمكن اختبار أرقام الطلبات لمعرفة الموجود منها.
       if (!order || !canView(req, order)) throw new NotFoundError("Order not found");
       res.json(order);
     });
 
+    // المالك يغيّر حالة الطلب (يؤكده، يشحنه، يسلمه، يلغيه).
     router.patch(
       "/orders/:id/status",
       authenticate,
@@ -110,6 +135,7 @@ export const ordersModule: CommerceModule = {
       }
     );
 
+    // المالك يسجل الدفع، مثلاً "paid" بعد استلام النقود من المندوب.
     router.patch(
       "/orders/:id/payment",
       authenticate,

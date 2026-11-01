@@ -8,33 +8,49 @@ import type { ExtensionRegistry } from "./extensions";
 import type { FailureLimiter } from "../engine/rate-limiter";
 import type { AppRequest } from "../engine/http/request";
 
-/** Everything a module is handed when it registers - modules never create these themselves. */
+/**
+ * "صندوق الأدوات" الذي تستلمه كل وحدة وكل إضافة عند تسجيلها.
+ *
+ * الوحدات لا تُنشئ أي شيء من هذه بنفسها: createCommerceApp (src/app.ts) ينشئها مرة واحدة
+ * ويعطيها للجميع. فائدة ذلك أن كل الوحدات تشترك في نفس الـ Router، ونفس الحاوية، ونفس
+ * مجموعة اتصالات القاعدة، وأن الاختبار يستطيع تمرير صندوق أدوات مختلف.
+ */
 export interface ModuleContext {
+  /** لتسجيل مسارات الوحدة. */
   router: Router;
+  /** لتسجيل خدمات الوحدة، وطلب خدمات الوحدات الأخرى. */
   container: Container;
+  /** مجموعة الاتصالات الوحيدة بقاعدة البيانات. */
   pool: Pool;
+  /** جدول الأدوار والصلاحيات، تمرره الوحدة إلى requirePermission. */
   accessControl: AccessControl;
   logger: Logger;
-  /** Rejects the request with 401 unless it is authenticated. */
+  /** يرفض الطلب بـ 401 إن لم يكن المرسل معروفاً (auth.required). */
   authenticate: Handler;
-  /** Identifies the caller if credentials are sent, but lets anonymous requests through. */
+  /** يتعرف على المرسل إن أرسل بيانات دخول، ويسمح للمجهول بالمرور (auth.optional). */
   authenticateOptional: Handler;
-  /** Issues a signed login token for a customer (the signing secret itself is never handed out). */
+  /**
+   * يصدر توكن دخول موقّعاً لزبون. الوحدات تستطيع إصدار التوكن، لكنها لا ترى سر التوقيع
+   * نفسه: الدالة "تتذكر" السر داخلياً (Closure)، وهذا تطبيق لمبدأ أقل صلاحية ممكنة.
+   */
   issueCustomerToken(customerId: string): string;
-  /** Shipping/payment providers and event listeners contributed by plugins. */
+  /** طرق الشحن والدفع ومستمعو الأحداث التي تضيفها الإضافات (extensions.ts). */
   extensions: ExtensionRegistry;
-  /** Failed-login counter per IP and per email; null when rate limiting is turned off. */
+  /** عدّاد محاولات الدخول الفاشلة لكل عنوان ولكل بريد، أو null إن أُطفئ حد المحاولات. */
   loginLimiter: FailureLimiter | null;
-  /** Registration-attempt counter per IP; null when turned off. */
+  /** عدّاد محاولات التسجيل لكل عنوان، أو null إن أُطفئ. */
   registrationLimiter: FailureLimiter | null;
-  /** The caller's IP (honours X-Forwarded-For only when trustProxy is on). */
+  /** عنوان IP للمرسل. يأخذ X-Forwarded-For في الاعتبار فقط إن كان trustProxy مفعّلاً. */
   clientIp(req: AppRequest): string;
 }
 
 /**
- * The contract every commerce module (and, later, every plugin) follows:
- * a name, the SQL migrations for its tables, and a register() that wires its
- * repositories into the DI container and its routes into the router.
+ * العقد الذي تلتزم به كل وحدة تجارية (الأقسام، والمنتجات، والمخزون، والزبائن، والسلة، والطلبات):
+ *   - name: اسمها.
+ *   - migrations: سكربتات SQL لجداولها.
+ *   - register: تسجّل مستودعاتها في حاوية الـ DI، ومساراتها في الـ Router.
+ *
+ * أي شيء يلتزم بهذا الشكل يمكن تركيبه في الإطار، وهذا ما يجعل الإطار "معيارياً" (Modular).
  */
 export interface CommerceModule {
   name: string;
@@ -43,10 +59,13 @@ export interface CommerceModule {
 }
 
 /**
- * A plugin: set up AFTER every module, so it can use any module's services
- * (e.g. resolve ORDERS_SERVICE) and register providers, listeners and extra
- * routes. Plugin migration ids should start at "9000_" so they always run
- * after the built-in ones.
+ * الإضافة (Plugin): تُهيَّأ بعد كل الوحدات، لتستطيع استخدام أي خدمة منها (مثل طلب
+ * ORDERS_SERVICE من الحاوية)، وتسجيل طرق شحن ودفع، ومستمعي أحداث، ومسارات إضافية.
+ *
+ * الفرق عن الوحدة: الوحدة جزء أساسي من الإطار، والإضافة يختارها كل متجر حسب حاجته
+ * (مثلاً AMA يختار الشحن حسب المدينة والدفع عند الاستلام)، دون تعديل كود الإطار.
+ *
+ * أرقام migrations الإضافات يجب أن تبدأ من "9000_"، فتُطبَّق دائماً بعد جداول الإطار.
  */
 export interface CommercePlugin {
   name: string;

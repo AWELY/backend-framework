@@ -1,24 +1,38 @@
 /**
- * Reads configuration from environment variables. Nothing else in the framework
- * touches `process.env` directly - every other module receives config as plain
- * data, which keeps them testable without real env vars.
+ * يقرأ الإعدادات من متغيرات البيئة (process.env)، أي من ملف .env بعد أن يحمّله dotenv.
+ *
+ * هذا هو المكان الوحيد في الإطار الذي يقرأ process.env مباشرة. كل الأجزاء الأخرى
+ * تستلم الإعدادات كقيم عادية (مثل createCommerceApp({ databaseUrl, ... }))، وهذا يجعل
+ * اختبارها سهلاً دون متغيرات بيئة حقيقية.
+ *
+ * لماذا الإعدادات في .env وليست في الكود؟
+ *   - الأسرار (كلمة سر القاعدة، ومفتاح المالك) لا يجب أن تُرفع إلى GitHub، و .env مستثنى في .gitignore.
+ *   - كل جهاز له قيمه (جهازك، وجهاز زميلك، والخادم لاحقاً) بنفس الكود.
  */
 
+/** مستويات السجل من الأكثر تفصيلاً إلى الأهم. */
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
+/** كل إعدادات التطبيق بعد قراءتها والتحقق منها. */
 export interface AppConfig {
+  /** بيئة التشغيل، مثل "development" أو "production". */
   env: string;
+  /** المنفذ الذي يستمع عليه الخادم، والافتراضي 3000. */
   port: number;
+  /** مفتاح المالك: يُرسل في ترويسة X-Api-Key ليعطي صلاحيات المالك كاملة. */
   ownerApiKey: string;
-  /** Signs customer login tokens. Changing it logs every customer out. */
+  /** السر الذي توقَّع به توكنات دخول الزبائن. تغييره يُخرج كل الزبائن من حساباتهم. */
   authTokenSecret: string;
   logLevel: LogLevel;
+  /** الموقع المسموح له باستدعاء الـ API من المتصفح، مثل "http://localhost:5173". */
   corsOrigin: string;
+  /** رابط الاتصال بـ PostgreSQL، مثل postgresql://user:password@localhost:5432/ama_store */
   databaseUrl: string;
-  /** true only when the app runs behind ONE trusted reverse proxy (e.g. nginx). */
+  /** true فقط إن كان التطبيق خلف Reverse proxy واحد موثوق، مثل nginx (انظر http/client-ip.ts). */
   trustProxy: boolean;
 }
 
+/** يقرأ متغيراً إلزامياً. إن لم يوجد، يفشل الإقلاع فوراً برسالة واضحة بدل أن ينهار الخادم لاحقاً. */
 function required(name: string): string {
   const value = process.env[name];
   if (!value) {
@@ -30,8 +44,10 @@ function required(name: string): string {
 }
 
 /**
- * A secret must be long and must not be the placeholder from .env.example, so
- * a project can never start up with a guessable owner key or signing secret.
+ * يقرأ سراً، ويرفض السر الضعيف: يجب أن يكون 32 حرفاً على الأقل، وألا يكون القيمة المثالية
+ * من .env.example (التي تبدأ بـ "change-me").
+ * السبب: لو نسي أحد تغيير المفتاح، لعمل المتجر بمفتاح يعرفه الجميع. هنا لا يقلع البرنامج أصلاً.
+ * رسالة الخطأ تعطي أمراً جاهزاً لتوليد سر عشوائي.
  */
 function secret(name: string): string {
   const value = required(name);
@@ -44,6 +60,10 @@ function secret(name: string): string {
   return value;
 }
 
+/**
+ * يقرأ كل الإعدادات ويتحقق منها. يستدعيها المتجر عند الإقلاع (storefront/api/app.js و src/dev-server.ts).
+ * "??" تعني: إن لم توجد القيمة، استخدم القيمة الافتراضية بعدها.
+ */
 export function loadConfig(): AppConfig {
   return {
     env: process.env.NODE_ENV ?? "development",
@@ -51,8 +71,10 @@ export function loadConfig(): AppConfig {
     ownerApiKey: secret("OWNER_API_KEY"),
     authTokenSecret: secret("AUTH_TOKEN_SECRET"),
     logLevel: (process.env.LOG_LEVEL as LogLevel) ?? "info",
+    // "*" تسمح لأي موقع. متجر AMA يضبطها على عنوان موقعه فقط.
     corsOrigin: process.env.CORS_ORIGIN ?? "*",
     databaseUrl: required("DATABASE_URL"),
+    // true فقط إن كُتبت حرفياً "true". أي قيمة أخرى تعني false، وهذا هو الأكثر أماناً.
     trustProxy: process.env.TRUST_PROXY === "true",
   };
 }

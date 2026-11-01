@@ -1,9 +1,17 @@
 import { esc, money, formatDate, ORDER_STATUS, PAYMENT_STATUS } from "./ui.js";
 
+// مراحل الطلب بالترتيب، لشريط التقدم. الإلغاء ليس مرحلة، بل يُعرض كرسالة.
 const STEPS = ["pending", "confirmed", "shipped", "delivered"];
 
-/** One order as a card with a progress bar - shared by "My orders" and "Track your order". */
+/**
+ * طلب واحد كبطاقة مع شريط تقدم. تستخدمها صفحتا "طلباتي" و"تتبع طلبك".
+ *
+ * كل قيمة جاءت من الـ API وفيها نص (الرقم، والاسم، والعنوان...) تمر عبر esc قبل وضعها في
+ * HTML. لو دسّ أحد <script> في عنوانه، يظهر نصاً عادياً ولا يعمل (حماية من XSS).
+ * الأرقام (الكمية) و money(...) لا تحتاج esc، لأنها لا تحتوي رموز HTML.
+ */
 export function orderCard(order) {
+  // رقم المرحلة الحالية: كل مرحلة رقمها أقل منه أو يساويه تُعلَّم "done".
   const reached = STEPS.indexOf(order.status);
   const progress =
     order.status === "cancelled"

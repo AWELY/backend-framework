@@ -2,9 +2,23 @@ import type { Migration } from "../../db/migrations";
 import type { Schema } from "../../engine/validation";
 import { UUID_REGEX } from "../../db/ids";
 
+/**
+ * جدولا السلة (0500):
+ *
+ * carts: رأس السلة.
+ *   customer_id : الزبون صاحبها، أو NULL لسلة الضيف. ON DELETE SET NULL: حذف الزبون لا يحذف سلته.
+ *   status      : 'open' (مفتوحة) أو 'checked_out' (اشتُريت). CHECK يمنع أي قيمة أخرى.
+ *
+ * cart_items: سطور السلة، سطر لكل منتج.
+ *   المفتاح الأساسي (cart_id, product_id): نفس المنتج لا يتكرر في نفس السلة.
+ *   ON DELETE CASCADE: حذف السلة أو المنتج يحذف السطر معه.
+ *   quantity    : من 1 إلى 1000 (CHECK). السطر بكمية 0 يُحذف بدل أن يُحفظ.
+ *   added_at    : لترتيب السطور حسب وقت الإضافة.
+ * لاحظ: لا يوجد سعر هنا. السعر يُقرأ من المنتج دائماً، ولا يُثبَّت إلا في الطلب.
+ */
 export const cartMigrations: Migration[] = [
   {
-    // Depends on customers (0400) and products (0200).
+    // يعتمد على الزبائن (0400) والمنتجات (0200).
     id: "0500_create_carts",
     up: `
       CREATE TABLE carts (
@@ -27,38 +41,45 @@ export const cartMigrations: Migration[] = [
   },
 ];
 
+/** جسم الإضافة: المنتج (UUID) والكمية المضافة (من 1 إلى 1000). */
 export const addItemSchema = {
   productId: { type: "string", pattern: UUID_REGEX },
   quantity: { type: "number", integer: true, min: 1, max: 1000 },
 } as const satisfies Schema;
 
+/** جسم ضبط الكمية. */
 export const setItemSchema = {
-  // 0 removes the line.
+  // القيمة 0 تحذف السطر.
   quantity: { type: "number", integer: true, min: 0, max: 1000 },
 } as const satisfies Schema;
 
+/** سطر في السلة كما يرد في الـ API. */
 export interface CartLine {
   productId: string;
   name: string;
   imageUrl: string | null;
+  /** السعر الحالي للقطعة، بالدرهم. */
   unitPrice: number;
   quantity: number;
+  /** unitPrice × quantity. */
   lineTotal: number;
-  /** false if the product was hidden (isActive=false) after being added - checkout will refuse it. */
+  /** false إن أُخفي المنتج (isActive = false) بعد إضافته، وإتمام الشراء سيرفضه. */
   available: boolean;
 }
 
+/** السلة كاملة كما ترد في الـ API. */
 export interface Cart {
   id: string;
   customerId: string | null;
   status: "open" | "checked_out";
   items: CartLine[];
-  /** Sum of AVAILABLE lines, at CURRENT product prices, in the smallest currency unit. */
+  /** مجموع السطور المتاحة فقط، بالأسعار الحالية، بأصغر وحدة للعملة (الدرهم). */
   total: number;
   createdAt: Date;
   updatedAt: Date;
 }
 
+/** رأس السلة فقط: ما يحتاجه فحص الصلاحية والحالة. */
 export interface CartHeader {
   id: string;
   customerId: string | null;

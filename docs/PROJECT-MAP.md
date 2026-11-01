@@ -134,6 +134,7 @@
 |---|---|
 | نظرة عامة (بالإنجليزية) | `README.md` |
 | خطة فهم ومراجعة المشروع للفريق | `docs/STUDY-PLAN.md` |
+| توزيع المشروع على الفريق (من يملك ماذا) | `docs/TEAM-ROLES.md` |
 | التثبيت على Windows | `docs/SETUP.md` |
 | التثبيت على Linux | `docs/SETUP-LINUX.md` |
 | كل مسارات الـ API | `docs/API.md` |

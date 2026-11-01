@@ -1,26 +1,35 @@
 import type { CommercePlugin } from "../modules/types";
 import { ValidationError } from "../engine/errors";
 
+/** خيارات إضافة الشحن حسب المدينة. */
 export interface CityRateShippingOptions {
   /**
-   * Delivery price per city, in the smallest currency unit, e.g.
-   * { "طرابلس": 10000, "بنغازي": 20000 }. Cities not listed are not served.
-   * The keys, in this order, are what the storefront shows in its drop-down.
+   * سعر التوصيل لكل مدينة، بأصغر وحدة للعملة، مثل:
+   *   { "طرابلس": 10000, "بنغازي": 20000 }
+   * المدينة غير المذكورة لا يصلها التوصيل.
+   * المفاتيح، بنفس هذا الترتيب، هي ما يعرضه الموقع في القائمة المنسدلة.
    */
   rates: Record<string, number>;
-  /** Orders whose items total at least this much ship free (in served cities). */
+  /** الطلبات التي يبلغ مجموع منتجاتها هذا المبلغ أو أكثر توصيلها مجاني (في المدن المخدومة). */
   freeOver?: number;
+  /** المعرّف، والافتراضي "city-rate". */
   id?: string;
+  /** الاسم الظاهر للمشتري، والافتراضي "Home delivery". */
   name?: string;
 }
 
 /**
- * Delivery priced by destination city - how most Libyan online stores charge.
- * It publishes its cities (GET /checkout/options), so the storefront builds the
- * city drop-down from the plugin instead of hard-coding it, and it rejects a
- * city it does not serve with a 400 that lists the valid ones.
+ * توصيل يُسعَّر حسب مدينة الوجهة، وهكذا تحسب أغلب المتاجر الليبية على الإنترنت.
+ *
+ * تنشر الإضافة قائمة مدنها (في GET /checkout/options)، فيبني الموقع القائمة المنسدلة من
+ * الإضافة نفسها بدل كتابتها في كود الموقع. وترفض المدينة التي لا تخدمها برد 400 يذكر
+ * المدن المتاحة.
+ *
+ * متجر AMA يستخدمها بـ 16 مدينة (DELIVERY_RATES في storefront/api/app.js)،
+ * والتوصيل مجاني فوق 500 دينار.
  */
 export function cityRateShipping(options: CityRateShippingOptions): CommercePlugin {
+  // الفحص يحدث هنا، عند الإقلاع: إعداد خاطئ يوقف التشغيل فوراً، لا عند أول عملية شراء.
   const cities = Object.keys(options.rates);
   if (cities.length === 0) throw new Error("cityRateShipping: at least one city is required");
   for (const [city, rate] of Object.entries(options.rates)) {
@@ -37,14 +46,18 @@ export function cityRateShipping(options: CityRateShippingOptions): CommercePlug
         id,
         name: options.name ?? "Home delivery",
         cities,
+        // يستلم فقط ما يحتاجه للتسعير (انظر ShippingQuoteInput في modules/extensions.ts).
         quote: ({ subtotal, shippingCity }) => {
+          // trim: يحذف المسافات حول اسم المدينة إن أُرسلت بالخطأ.
           const city = shippingCity?.trim();
           const rate = city === undefined ? undefined : options.rates[city];
+          // مدينة غير مخدومة أو غير مرسلة: 400 بقائمة المدن الصحيحة.
           if (rate === undefined) {
             throw new ValidationError("Validation failed", [
               { field: "shippingCity", message: `must be one of: ${cities.join(", ")}` },
             ]);
           }
+          // مجاني فوق الحد، وإلا سعر المدينة.
           return options.freeOver !== undefined && subtotal >= options.freeOver ? 0 : rate;
         },
       });

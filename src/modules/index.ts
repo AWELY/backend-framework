@@ -8,9 +8,14 @@ import { cartModule } from "./cart";
 import { ordersModule } from "./orders";
 
 /**
- * Built-in commerce modules, in dependency order: a module may only use what an
- * EARLIER one registered (Cart uses Products + Inventory; Orders uses Cart,
- * Inventory and Customers). Migration ids follow the same order (0100 ... 0600).
+ * الوحدات التجارية الست المدمجة في الإطار، بترتيب اعتمادها على بعضها.
+ *
+ * القاعدة: الوحدة تستطيع استخدام ما سجّلته وحدة قبلها فقط، لأن createCommerceApp يسجّلها
+ * بهذا الترتيب. السلة تستخدم المنتجات والمخزون، والطلبات تستخدم السلة والمخزون والزبائن،
+ * فيجب أن تأتي بعدها.
+ *
+ * أرقام الـ migrations تتبع نفس الترتيب (0100 للأقسام ... 0600 للطلبات)، لأن جداول
+ * الوحدات اللاحقة تشير إلى جداول السابقة (مثل products.category_id يشير إلى categories).
  */
 export const coreModules: CommerceModule[] = [
   categoriesModule,
@@ -21,9 +26,11 @@ export const coreModules: CommerceModule[] = [
   ordersModule,
 ];
 
+/** يجمع migrations كل الوحدات في قائمة واحدة. flatMap تدمج قوائم الوحدات في قائمة مسطحة. */
 export function collectMigrations(modules: CommerceModule[]): Migration[] {
   return modules.flatMap((m) => m.migrations);
 }
 
+// نصدّر كل وحدة منفردة أيضاً، لمن يريد تركيب الإطار بوحدات مختارة فقط.
 export { categoriesModule, productsModule, inventoryModule, customersModule, cartModule, ordersModule };
 export type { CommerceModule, CommercePlugin, ModuleContext } from "./types";

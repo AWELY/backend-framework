@@ -1,7 +1,12 @@
 /**
- * Built-in example plugins. They use only the public extension points
- * (ModuleContext.extensions), exactly like a third-party plugin would - they
- * are the reference for writing one (e.g. a real local payment gateway).
+ * الإضافات المدمجة مع الإطار، كأمثلة جاهزة.
+ *
+ * تستخدم فقط نقاط التوسع العامة (ModuleContext.extensions)، تماماً كما تفعل إضافة يكتبها
+ * أي مطور من خارج الفريق. لذلك هي المرجع لكتابة إضافة جديدة، مثل ربط بوابة دفع ليبية حقيقية.
+ *
+ *   cashOnDelivery    : الدفع عند الاستلام.
+ *   flatRateShipping  : شحن بسعر ثابت لكل طلب.
+ *   cityRateShipping  : شحن بسعر حسب المدينة.
  */
 export { cashOnDelivery } from "./cash-on-delivery";
 export { flatRateShipping, type FlatRateShippingOptions } from "./flat-rate-shipping";

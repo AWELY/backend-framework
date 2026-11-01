@@ -1,3 +1,5 @@
+// صفحة الحساب (account.html): الدخول، وإنشاء حساب جديد، وعرض الملف الشخصي والخروج.
+// الحساب اختياري: الضيف يستطيع الشراء وتتبع طلبه دون حساب.
 import { api } from "../api.js";
 import { getToken, saveSession, clearSession } from "../store.js";
 import { mountLayout, esc, errorText, qs } from "../ui.js";
@@ -5,17 +7,23 @@ import { mountLayout, esc, errorText, qs } from "../ui.js";
 mountLayout("account");
 const app = document.getElementById("app");
 
-// Only local pages are allowed as a destination after login (no open redirect).
+// الصفحة التي ننتقل إليها بعد الدخول، من ?next= في الرابط (مثلاً العودة إلى إتمام الطلب).
+// نقبل فقط اسم صفحة محلية بسيطة مثل "checkout.html"، ولا نقبل رابطاً كاملاً. لو قبلنا أي
+// رابط، لاستطاع مهاجم إرسال رابط دخول حقيقي لمتجرنا ينقل الضحية بعده إلى موقع مزيف
+// (هجوم اسمه Open redirect). أي قيمة أخرى تعطي "orders.html".
 const next = /^[a-z-]+\.html$/.test(qs("next") ?? "") ? qs("next") : "orders.html";
 
+/** المسجل دخوله يرى ملفه، والزائر يرى نموذج الدخول. */
 async function render() {
   if (getToken()) {
+    // توكن منتهٍ: catch ترجع null، فيظهر نموذج الدخول بدل خطأ.
     const me = await api("/customers/me").catch(() => null);
     if (me) return renderProfile(me);
   }
   renderForms("login");
 }
 
+/** الملف الشخصي، وزر الخروج يمسح الجلسة من المتصفح ويعود إلى الرئيسية. */
 function renderProfile(me) {
   app.innerHTML = `
     <h1 class="page-title">حسابي</h1>
@@ -33,6 +41,10 @@ function renderProfile(me) {
   });
 }
 
+/**
+ * نموذجا الدخول والتسجيل في تبويبين. tab: أي التبويبين ظاهر ("login" أو "register").
+ * التبديل بين التبويبين يعيد رسم الصفحة بالتبويب الآخر.
+ */
 function renderForms(tab) {
   app.innerHTML = `
     <h1 class="page-title">حسابي</h1>
@@ -67,7 +79,10 @@ function renderForms(tab) {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     showError(null);
+    // FormData يقرأ كل حقول النموذج بأسمائها (name)، و Object.fromEntries يحوّلها إلى كائن.
     const data = Object.fromEntries(new FormData(form));
+    // نحذف المسافات حول القيم، ونحذف الحقول الفارغة (مثل الهاتف الاختياري)، لأن الـ API
+    // يرفض الحقل الفارغ إن أُرسل، ويقبل غيابه.
     for (const key of Object.keys(data)) {
       data[key] = String(data[key]).trim();
       if (data[key] === "") delete data[key];
@@ -76,6 +91,7 @@ function renderForms(tab) {
     button.disabled = true;
     try {
       const path = form.hasAttribute("data-login") ? "/customers/login" : "/customers/register";
+      // الرد في الحالتين: { customer, token }. نحفظ الجلسة، ثم ننتقل.
       const result = await api(path, { method: "POST", body: data });
       saveSession(result.token, result.customer);
       location.href = next;

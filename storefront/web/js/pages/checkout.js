@@ -1,3 +1,10 @@
+// صفحة إتمام الطلب (checkout.html)، وهي الأعقد في الموقع:
+//   - بيانات المستلم (الاسم والهاتف)، وتُملأ من الحساب إن كان الزبون مسجلاً.
+//   - طريقة الاستلام والمدينة والعنوان، وسعر التوصيل يُحدَّث فوراً من الخادم.
+//   - طريقة الدفع.
+//   - إرسال الطلب، ثم صفحة نجاح فيها رقم الطلب ورابط تتبعه.
+// طرق الشحن والدفع والمدن لا تُكتب هنا: تأتي من GET /checkout/options، أي من الإضافات
+// المثبتة في الـ API. إضافة طريقة جديدة في الخادم تظهر هنا تلقائياً، دون تعديل هذا الملف.
 import { api, getExistingCart, ApiError } from "../api.js";
 import { getToken, setCartId } from "../store.js";
 import { mountLayout, esc, money, errorText, refreshCartBadge, icon } from "../ui.js";
@@ -5,10 +12,13 @@ import { mountLayout, esc, money, errorText, refreshCartBadge, icon } from "../u
 mountLayout("checkout");
 const app = document.getElementById("app");
 
-// Same rule as the API (customers.schema PHONE); checked here first for instant feedback.
+// نفس قاعدة الـ API (PHONE في customers.schema.ts). نفحص هنا أولاً لرد فوري للمشتري،
+// لكن الخادم يفحص مرة أخرى دائماً: فحص المتصفح للراحة، وفحص الخادم للأمان.
 const PHONE = /^\+?[0-9][0-9 ()-]{5,29}$/;
+// العنوان الذي يُرسل مع الطلب عند الاستلام من المحل (الحقل إلزامي في الـ API).
 const PICKUP_ADDRESS = "استلام من المحل - تاجوراء";
-// /checkout/quote needs an address, but prices by city only - this stands in until the buyer types one.
+// المسار /checkout/quote يحتاج عنواناً، لكنه يسعّر حسب المدينة فقط. هذا العنوان المؤقت
+// يُستخدم للتسعير حتى يكتب المشتري عنوانه الحقيقي.
 const QUOTE_ADDRESS = "لحساب سعر التوصيل";
 
 async function load() {
@@ -17,11 +27,14 @@ async function load() {
     app.innerHTML = `<div class="panel empty"><div class="big">سلتك فارغة</div><a class="btn" href="index.html">تسوّق الآن</a></div>`;
     return;
   }
+  // في السلة منتج لم يعد متوفراً: نرجع إلى صفحة السلة، حيث تظهر رسالة الحذف.
   if (cart.items.some((i) => !i.available)) {
     location.href = "cart.html";
     return;
   }
 
+  // طلبان متوازيان: خيارات الشراء من الإضافات، وبيانات الزبون إن كان مسجلاً
+  // (توكن منتهٍ لا يوقف الصفحة: catch ترجع null، فيكمل كضيف).
   const [options, me] = await Promise.all([
     api("/checkout/options"),
     getToken() ? api("/customers/me").catch(() => null) : Promise.resolve(null),
@@ -29,6 +42,8 @@ async function load() {
   const methods = options.shippingMethods;
   const payments = options.paymentMethods;
 
+  // novalidate: نعطّل فحص المتصفح التلقائي، لنعرض رسائلنا العربية بأسلوب موحد.
+  // أول طريقة شحن وأول طريقة دفع مختارتان مسبقاً (i === 0).
   app.innerHTML = `
     <h1 class="page-title">إتمام الطلب</h1>
     <div class="layout-2">
@@ -75,10 +90,16 @@ async function load() {
   const citySelect = form.querySelector("#city");
   const cityField = form.querySelector("[data-city-field]");
   const delivery = form.querySelector("[data-delivery]");
+  // طريقة الشحن المختارة الآن. form.shippingMethod.value قيمة زر الاختيار المحدد.
   const selectedMethod = () => methods.find((m) => m.id === form.shippingMethod.value);
-  // Remembered separately from the <select>: switching to pickup and back must not lose the chosen city.
+  // المدينة المختارة محفوظة بعيداً عن القائمة المنسدلة: التبديل إلى "الاستلام من المحل" ثم
+  // العودة يعيد بناء القائمة، ويجب ألا يضيع اختيار المشتري (خطأ سابق في جدول 6.5).
   let chosenCity = "";
 
+  /**
+   * عند تغيير طريقة الاستلام: الاستلام من المحل يخفي المدينة والعنوان، والطريقة التي لها قائمة
+   * مدن تظهر القائمة مبنية من الخادم (مع إعادة اختيار المدينة المحفوظة)، ثم نعيد التسعير.
+   */
   function syncMethod() {
     const method = selectedMethod();
     const isPickup = method?.id === "pickup";
@@ -89,6 +110,11 @@ async function load() {
     updateQuote();
   }
 
+  /**
+   * يسأل الخادم عن سعر التوصيل والإجمالي، ويعرضهما في الملخص.
+   * السعر يُحسب في الخادم (إضافة الشحن)، لا في المتصفح: الموقع يعرض فقط.
+   * طريقة تحتاج مدينة ولم تُختر بعد: نطلب اختيارها بدل إرسال طلب سيُرفض.
+   */
   async function updateQuote() {
     const method = selectedMethod();
     const shippingEl = app.querySelector("[data-shipping]");
@@ -105,6 +131,7 @@ async function load() {
           cartId: cart.id,
           shippingAddress: QUOTE_ADDRESS,
           shippingMethod: method?.id,
+          // نرسل المدينة فقط لطريقة تسعّر حسب المدينة. "...شرط ? {...} : {}" تضيف الحقل أو لا شيء.
           ...(method?.cities ? { shippingCity: citySelect.value } : {}),
         },
       });
@@ -116,13 +143,16 @@ async function load() {
     }
   }
 
+  /** رسالة خطأ عامة أعلى النموذج، أو مسحها بـ null. */
   function showFormError(message) {
     app.querySelector("[data-form-error]").innerHTML = message ? `<div class="alert error">${esc(message)}</div>` : "";
   }
 
+  /** رسالة خطأ تحت حقل واحد بالاسم (مثل "contactPhone")، أو مسحها بـ null. */
   function setFieldError(name, message) {
     const input = form.elements.namedItem(name);
-    // Radio groups come back as a RadioNodeList, not one element - they have no error slot.
+    // مجموعة أزرار الاختيار (radio) ترجع كـ RadioNodeList لا كعنصر واحد، وليس لها مكان
+    // لرسالة الخطأ، فنتجاوزها. (خطأ سابق في جدول 6.5: كان الكود ينهار هنا.)
     if (!(input instanceof Element)) return;
     const field = input.closest(".field");
     if (!field) return;
@@ -130,8 +160,10 @@ async function load() {
     field.querySelector(".error").textContent = message ?? "";
   }
 
+  /** يفحص الحقول قبل الإرسال، ويعرض رسالة تحت كل حقل خاطئ. يرجع true إن كان كل شيء صحيحاً. */
   function validate() {
     const method = selectedMethod();
+    // لكل حقل: null إن كان صحيحاً، أو رسالة الخطأ.
     const errors = {
       contactName: form.contactName.value.trim() ? null : "الاسم مطلوب",
       contactPhone: PHONE.test(form.contactPhone.value.trim()) ? null : "أدخل رقم هاتف صحيح، مثال: 0912345678",
@@ -143,9 +175,10 @@ async function load() {
     return Object.values(errors).every((e) => e === null);
   }
 
-  // A field's error disappears as soon as the shopper edits that field.
+  // رسالة خطأ الحقل تختفي بمجرد أن يعدّل المشتري ذلك الحقل.
   form.addEventListener("input", (e) => setFieldError(e.target.name, null));
 
+  // تغيير طريقة الاستلام يعيد بناء الحقول، وتغيير المدينة يحفظها ويعيد التسعير.
   form.addEventListener("change", (e) => {
     setFieldError(e.target.name, null);
     if (e.target.name === "shippingMethod") syncMethod();
@@ -155,12 +188,15 @@ async function load() {
     }
   });
 
+  // إرسال الطلب.
   form.addEventListener("submit", async (e) => {
+    // preventDefault: نمنع المتصفح من إرسال النموذج وإعادة تحميل الصفحة، ونرسله نحن بـ fetch.
     e.preventDefault();
     showFormError(null);
     if (!validate()) return;
     const method = selectedMethod();
     const submit = form.querySelector("[data-submit]");
+    // تعطيل الزر أثناء الإرسال: الضغط المزدوج لا يرسل طلبين (والخادم يرفض الثاني بـ 409 على أي حال).
     submit.disabled = true;
     submit.textContent = "جاري إرسال الطلب...";
     try {
@@ -176,12 +212,14 @@ async function load() {
           paymentMethod: form.paymentMethod.value,
         },
       });
+      // السلة صارت طلباً: ننسى رقمها، فالإضافة التالية تنشئ سلة جديدة.
       setCartId(null);
       refreshCartBadge();
       showSuccess(order);
     } catch (err) {
       submit.disabled = false;
       submit.textContent = "تأكيد الطلب";
+      // الخادم رفض حقولاً (400): نعرض رسالة كل حقل تحته.
       if (err instanceof ApiError && Array.isArray(err.details)) {
         for (const d of err.details) setFieldError(d.field, errorText({ status: 400, details: [d] }));
       }
@@ -190,9 +228,14 @@ async function load() {
     }
   });
 
+  // أول تشغيل: نبني حقول طريقة الاستلام المختارة مسبقاً، ونسعّر.
   syncMethod();
 }
 
+/**
+ * صفحة النجاح: رقم الطلب، والإجمالي، وتعليمات الدفع من الإضافة، ورابط تتبع جاهز.
+ * رابط التتبع يحمل رقم الطلب والهاتف معاً، لأن الضيف يحتاجهما لرؤية طلبه.
+ */
 function showSuccess(order) {
   const trackUrl = `track.html?id=${encodeURIComponent(order.id)}&phone=${encodeURIComponent(order.contactPhone)}`;
   app.innerHTML = `

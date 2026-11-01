@@ -2,11 +2,13 @@ const { CATEGORIES_REPOSITORY, PRODUCTS_REPOSITORY, INVENTORY_REPOSITORY } = req
 const { buildApp } = require("./app");
 
 /**
- * AMA's sample catalogue. Prices in dirhams (1 LYD = 1000). Stock levels are
- * deliberately varied (sold out, only 2 left, plenty) so the website shows every
- * stock state. Each product's photo is web/images/products/<slug>.webp (free
- * Unsplash photos - sources in web/images/products/CREDITS.md).
- * Safe to run twice: existing products are kept, only their photo path is refreshed.
+ * الكتالوج التجريبي لمتجر AMA: 6 أقسام و 16 منتجاً. الأسعار بالدرهم (1 دينار = 1000).
+ *
+ * كميات المخزون متنوعة عمداً (نفد، وبقي 2 فقط، وكمية كبيرة)، ليعرض الموقع كل حالات المخزون.
+ * صورة كل منتج في web/images/products/<slug>.webp (صور مجانية من Unsplash، ومصادرها في
+ * web/images/products/CREDITS.md).
+ *
+ * تشغيله مرتين آمن: المنتجات الموجودة تبقى، ويُحدَّث مسار صورتها فقط إن تغيّر.
  */
 const CATALOGUE = [
   {
@@ -73,7 +75,12 @@ const CATALOGUE = [
   },
 ];
 
+/**
+ * npm run seed: يملأ الكتالوج. يطلب مستودعات الوحدات من حاوية الـ DI مباشرة، دون المرور
+ * بالـ API، ويطابق الموجود بالـ slug فلا يكرره.
+ */
 async function main() {
+  // "warn": سجل هادئ أثناء الملء.
   const { app } = buildApp("warn");
   const categories = app.container.resolve(CATEGORIES_REPOSITORY);
   const products = app.container.resolve(PRODUCTS_REPOSITORY);
@@ -89,10 +96,12 @@ async function main() {
         created++;
       }
       for (const item of group.products) {
+        // مسار الصورة على موقع المتجر نفسه، يقدمه web-server.js من مجلد web.
         const imageUrl = `/images/products/${item.slug}.webp`;
         const existing = existingProducts.find((p) => p.slug === item.slug);
         if (existing) {
-          // Databases seeded before the real photos still point at the old drawings.
+          // القواعد التي مُلئت قبل إضافة الصور الحقيقية ما زالت تشير إلى الرسومات القديمة،
+          // فنحدّث مسار الصورة فقط، ولا نلمس السعر ولا المخزون.
           if (existing.imageUrl !== imageUrl) {
             await products.update(existing.id, { imageUrl });
             created++;

@@ -4,15 +4,21 @@ import { ConflictError, ForbiddenError, NotFoundError } from "../../engine/error
 import type { CartHeader } from "./cart.schema";
 
 /**
- * Who may use a cart:
- *  - a GUEST cart (no customer): whoever holds its id. The id is a random UUID,
- *    so knowing it works like knowing a private link.
- *  - a CUSTOMER's cart: only that customer, or the owner.
- * Anyone else gets 404, not 403, so they cannot even learn the cart exists.
- * Shared by the Cart and Orders modules (checkout applies the same rule).
+ * من يحق له استخدام السلة؟
+ *
+ *  - سلة الضيف (لا زبون مربوط بها): من يعرف رقمها. الرقم UUID عشوائي، فمعرفته تشبه
+ *    معرفة رابط خاص لا يمكن تخمينه. الموقع يحفظ الرقم في متصفح المشتري.
+ *  - سلة الزبون: ذلك الزبون فقط، أو مالك المتجر.
+ *
+ * أي شخص آخر يحصل على 404 وليس 403. لماذا؟ 403 تعني "موجودة لكنها ليست لك"، وهذا
+ * بحد ذاته معلومة. أما 404 فلا تكشف حتى أن السلة موجودة.
+ *
+ * تستخدمها وحدتا السلة والطلبات (إتمام الشراء يطبق نفس القاعدة).
+ * ترجع السلة نفسها إن نجح الفحص، فيمكن تمرير النتيجة مباشرة إلى assertCartOpen.
  */
 export function assertCartAccess(req: AppRequest, cart: CartHeader | null, accessControl: AccessControl): CartHeader {
   if (!cart) throw new NotFoundError("Cart not found");
+  // مرسل معروف بدور لا يملك cart:manage: نعرفه ونرفضه صراحة (403).
   if (req.auth && !accessControl.can(req.auth.role, "cart:manage")) {
     throw new ForbiddenError("Missing permission: cart:manage");
   }
@@ -24,6 +30,10 @@ export function assertCartAccess(req: AppRequest, cart: CartHeader | null, acces
   return cart;
 }
 
+/**
+ * السلة يجب أن تكون مفتوحة. السلة التي اشتُريت (checked_out) لا تُعدَّل، وإلا لتغيّر
+ * محتواها بعد أن أصبح طلباً. الرد 409: تعارض مع حالتها الحالية.
+ */
 export function assertCartOpen(cart: CartHeader): void {
   if (cart.status !== "open") throw new ConflictError("This cart has already been checked out");
 }

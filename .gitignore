@@ -1,14 +1,17 @@
+# ما لا يُرفع إلى GitHub أبداً:
+# الحزم المثبتة (تُعاد بـ npm install)، والكود المترجَم (يُعاد بـ npm run build ومجلد build-test للاختبارات)،
+# وملف الأسرار .env، وملفات السجل.
 node_modules/
 dist/
 build-test/
 .env
 *.log
 
-# Project documents (proposals) are kept outside the repository
+# مستندات المشروع (المقترحات) تبقى خارج المستودع
 *.docx
 *.pdf
-# Office lock files
+# ملفات القفل المؤقتة التي ينشئها Office
 ~$*
 
-# Proposal, report and slides stay local (the repo is code only)
+# المقترح والتقرير والعرض تبقى على الجهاز (المستودع للكود فقط)
 documents/

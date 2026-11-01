@@ -1,5 +1,7 @@
 const { buildApp } = require("./app");
 
+// npm run migrate: يبني نفس التطبيق، لكن لا يستمع. يطبّق الـ migrations الناقصة فقط،
+// ثم يغلق الاتصال وينتهي. تشغيله مرة ثانية آمن: يرد "Database is already up to date".
 async function main() {
   const { app } = buildApp("info");
   try {

@@ -1,5 +1,19 @@
-/* AMA storefront - one stylesheet, right-to-left, mobile first. */
+/*
+ * تنسيق موقع متجر AMA: ملف تنسيق واحد لكل الصفحات، من اليمين إلى اليسار (RTL)، و"الهاتف أولاً".
+ *
+ * "الهاتف أولاً" (Mobile first): القواعد الأساسية مكتوبة لشاشة الهاتف، ثم تضيف قواعد
+ * @media (min-width: ...) في آخر الملف أعمدة أكثر للشاشات الأكبر.
+ *
+ * لا توجد خاصية style="..." في أي صفحة HTML ولا في أي سكربت: كل التنسيق هنا. السبب أن
+ * سياسة أمان المحتوى (CSP في web-server.js) تمنع التنسيق المكتوب داخل الصفحة.
+ * (خطأ سابق في جدول 6.5: خاصية style في الموقع منعتها الـ CSP، فنُقلت إلى هذا الملف.)
+ */
 
+/*
+ * المتغيرات (CSS custom properties): الألوان والزوايا والظلال في مكان واحد، وتُستخدم في كل
+ * الملف بـ var(--اسم). تغيير لون المتجر كله يعني تعديل سطر واحد هنا.
+ * الألوان: كحلي (--navy) للهوية، وبرتقالي (--orange) للأزرار والتمييز، وأخضر وأحمر للحالات.
+ */
 :root {
   --navy: #0b1f3a;
   --navy-2: #14305a;
@@ -26,7 +40,10 @@
   --font: "Cairo", "Tajawal", "Segoe UI", Tahoma, Arial, sans-serif;
 }
 
+/* ---------- الأساسيات ---------- */
+/* border-box: العرض المحدد لأي عنصر يشمل الحشو والإطار، فلا تكبر العناصر عن المتوقع. */
 * { box-sizing: border-box; }
+/* direction: rtl تجعل الصفحة كلها من اليمين إلى اليسار، و smooth تجعل الانتقال إلى #products ناعماً. */
 html { direction: rtl; scroll-behavior: smooth; }
 body {
   margin: 0;
@@ -47,11 +64,14 @@ h1, h2, h3, h4 { line-height: 1.4; }
 .container { width: 100%; max-width: 1240px; margin: 0 auto; padding: 0 16px; }
 .hidden { display: none !important; }
 .muted { color: var(--muted); }
+/* .ltr للنصوص التي تُقرأ من اليسار داخل الصفحة العربية: الهاتف والبريد ورقم الطلب. */
 .ltr { direction: ltr; unicode-bidi: embed; }
 .icon { flex-shrink: 0; }
+/* إطار واضح حول العنصر المختار بلوحة المفاتيح (Tab)، لمن لا يستخدم الفأرة. */
 :focus-visible { outline: 3px solid rgba(255, 122, 0, 0.45); outline-offset: 2px; }
 
-/* ---------- top bar + header ---------- */
+/* ---------- الشريط العلوي والرأس (يبنيهما mountLayout في ui.js) ---------- */
+/* الرأس ثابت أعلى الشاشة أثناء التمرير (position: sticky)، فيبقى البحث والسلة في متناول اليد. */
 .topbar { background: var(--navy); color: #c9d4e8; font-size: 13px; }
 .topbar .container { display: flex; justify-content: space-between; gap: 12px; padding-block: 7px; }
 .topbar-group { display: flex; gap: 20px; }
@@ -85,6 +105,7 @@ h1, h2, h3, h4 { line-height: 1.4; }
   font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px;
 }
 
+/* شريط الأقسام: يتمرر أفقياً على الهاتف إن لم تتسع الأقسام، مع إخفاء شريط التمرير. */
 .catbar { background: var(--card); border-bottom: 1px solid var(--line); }
 .catbar .container { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
 .catbar .container::-webkit-scrollbar { display: none; }
@@ -95,7 +116,8 @@ h1, h2, h3, h4 { line-height: 1.4; }
 .catbar a:hover { color: var(--orange); }
 .catbar a.active { color: var(--orange); border-bottom-color: var(--orange); }
 
-/* ---------- buttons, inputs ---------- */
+/* ---------- الأزرار وحقول الإدخال ---------- */
+/* .btn الأساسي برتقالي، ونسخه: -lg كبير، -dark كحلي، -light فاتح، -ghost شفاف فوق الخلفيات الداكنة. */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   border: 0; border-radius: 12px; padding: 11px 22px; font-weight: 700; cursor: pointer;
@@ -115,6 +137,7 @@ h1, h2, h3, h4 { line-height: 1.4; }
 .btn-block { width: 100%; }
 .btn-sm { padding: 7px 12px; font-size: 14px; }
 
+/* .field: عنوان الحقل، ثم الحقل، ثم مكان رسالة الخطأ. والصنف .invalid (يضيفه checkout.js) يلوّن الإطار بالأحمر. */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
 .field label { font-weight: 700; font-size: 14px; }
 .field input, .field select, .field textarea {
@@ -125,7 +148,8 @@ h1, h2, h3, h4 { line-height: 1.4; }
 .field .error { color: var(--red); font-size: 13px; min-height: 0; }
 .field.invalid input, .field.invalid select, .field.invalid textarea { border-color: var(--red); }
 
-/* ---------- hero ---------- */
+/* ---------- الواجهة الكبيرة في الرئيسية (hero) ---------- */
+/* الخلفية ثلاث طبقات: توهج برتقالي، وتوهج أزرق، فوق تدرج كحلي. الصور على اليسار تظهر فقط على الشاشات الكبيرة. */
 .hero {
   position: relative; overflow: hidden; margin-top: 24px; border-radius: 24px; color: #fff;
   background:
@@ -138,6 +162,7 @@ h1, h2, h3, h4 { line-height: 1.4; }
   display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #ffd2a8;
   background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 999px; padding: 4px 12px;
 }
+/* clamp(أدنى، مفضل، أعلى): حجم الخط يتغير مع عرض الشاشة (4.4vw) بين 28 و 46 بكسل. */
 .hero h1 { margin: 16px 0 10px; font-size: clamp(28px, 4.4vw, 46px); font-weight: 900; line-height: 1.3; }
 .hero h1 .accent { color: var(--orange); display: block; }
 .hero p { margin: 0 0 24px; color: #c9d4e8; font-size: 17px; max-width: 520px; }
@@ -154,7 +179,8 @@ h1, h2, h3, h4 { line-height: 1.4; }
 }
 .hero-chip .icon { color: var(--orange); }
 
-/* ---------- trust bar ---------- */
+/* ---------- شريط المزايا (التوصيل، والدفع عند الاستلام...) ---------- */
+/* عمودان على الهاتف، وأربعة على الشاشات الأكبر. الخطوط بين العناصر هي لون الخلفية يظهر من فجوة 1px. */
 .trust {
   display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; margin-top: 16px; background: var(--line);
   border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
@@ -167,7 +193,7 @@ h1, h2, h3, h4 { line-height: 1.4; }
 .trust-item b { display: block; font-size: 15px; }
 .trust-item span { color: var(--muted); font-size: 13px; }
 
-/* ---------- sections ---------- */
+/* ---------- الأقسام في الصفحة: العنوان، والترتيب، وأزرار تصفية الأقسام (chips) ---------- */
 .section { margin-top: 36px; }
 .section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
 .section-head h2 { margin: 0; font-size: 24px; font-weight: 800; }
@@ -184,7 +210,7 @@ h1, h2, h3, h4 { line-height: 1.4; }
 .chip:hover { border-color: var(--orange); color: var(--orange); }
 .chip.active { background: var(--navy); border-color: var(--navy); color: #fff; }
 
-/* category tiles */
+/* مربعات الأقسام في الرئيسية: صورة دائرية واسم القسم وعدد منتجاته. */
 .cat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .cat-tile {
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 10px;
@@ -197,7 +223,10 @@ h1, h2, h3, h4 { line-height: 1.4; }
 .cat-tile b { font-size: 15px; }
 .cat-tile .muted { font-size: 12px; }
 
-/* ---------- product cards ---------- */
+/* ---------- بطاقات المنتجات (productCard في ui.js) ---------- */
+/* الشبكة: عمودان على الهاتف، ثم 3، ثم 4 على الشاشات الكبيرة (انظر @media في آخر الملف).
+ * aspect-ratio: 1 تجعل مكان الصورة مربعاً دائماً، فلا تقفز البطاقات أثناء تحميل الصور.
+ * -webkit-line-clamp: 2 يقطع اسم المنتج الطويل بعد سطرين مع "...". */
 .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 16px; }
 .card {
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
@@ -228,11 +257,13 @@ h1, h2, h3, h4 { line-height: 1.4; }
 .add-btn.added { background: var(--green); color: #fff; }
 .add-btn:disabled:not(.added) { background: var(--surface); color: #9aa3b8; cursor: not-allowed; }
 
+/* شارات المخزون (stockBadge في ui.js): أخضر متوفر، وبرتقالي "باقي قليل"، وأحمر نفد. */
 .stock { font-size: 12px; font-weight: 700; border-radius: 999px; padding: 3px 10px; display: inline-block; }
 .stock.in { background: var(--green-bg); color: var(--green); }
 .stock.low { background: var(--amber-bg); color: var(--orange-dark); }
 .stock.out { background: var(--red-bg); color: var(--red); }
 
+/* الحالات العامة: صفحة فارغة (سلة فارغة، لا نتائج)، والتحميل، واللوحة البيضاء (.panel)، وعنوان الصفحة. */
 .empty { text-align: center; padding: 50px 16px; color: var(--muted); }
 .empty .big { font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 6px; }
 .empty-icon, .success-icon { display: inline-grid; place-items: center; width: 88px; height: 88px; border-radius: 50%; margin-bottom: 12px; }
@@ -244,7 +275,8 @@ h1, h2, h3, h4 { line-height: 1.4; }
 .page-title { margin: 28px 0 16px; font-size: 28px; font-weight: 800; }
 .page-title .muted { font-size: 16px; font-weight: 600; }
 
-/* ---------- product page ---------- */
+/* ---------- صفحة المنتج: مسار التنقل، والصورة، والسعر، واختيار الكمية، والمزايا ---------- */
+/* على الشاشات الكبيرة: الصورة يميناً والمعلومات يساراً، والصورة تبقى ظاهرة أثناء التمرير (sticky). */
 .breadcrumb { font-size: 14px; color: var(--muted); margin-top: 20px; }
 .breadcrumb a:hover { color: var(--orange); }
 .breadcrumb span { color: var(--text); }
@@ -259,6 +291,7 @@ h1, h2, h3, h4 { line-height: 1.4; }
 .price-box .currency { font-size: 16px; }
 .price-box .muted { font-size: 13px; display: block; }
 .product .desc { color: #3b4660; font-size: 16px; }
+/* مربع الكمية بزرّي + و -. السطران الأخيران يخفيان أسهم حقل الأرقام الافتراضية في المتصفحات. */
 .qty { display: inline-flex; align-items: center; border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; }
 .qty button { border: 0; background: transparent; width: 42px; height: 46px; cursor: pointer; display: grid; place-items: center; color: var(--navy); }
 .qty button:hover { background: var(--surface); }
@@ -272,7 +305,8 @@ h1, h2, h3, h4 { line-height: 1.4; }
 .perks b { display: block; font-size: 15px; }
 .perks span { color: var(--muted); font-size: 13px; }
 
-/* ---------- cart + checkout ---------- */
+/* ---------- السلة وإتمام الطلب ---------- */
+/* .layout-2: عمود واحد على الهاتف، وعلى الشاشات الكبيرة عمودان (المحتوى والملخص)، والملخص يبقى ظاهراً. */
 .layout-2 { display: grid; gap: 20px; align-items: start; }
 .cart-line { display: grid; grid-template-columns: 88px 1fr; gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--line); }
 .cart-line:first-child { padding-top: 0; }
@@ -290,6 +324,7 @@ h1, h2, h3, h4 { line-height: 1.4; }
 .summary .total { border-top: 1px dashed #cfd6e4; margin-top: 8px; padding-top: 12px; font-size: 20px; font-weight: 900; color: var(--navy); }
 .summary .btn { margin-top: 10px; }
 .summary-note { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--green); font-size: 14px; font-weight: 700; margin: 12px 0 4px; }
+/* خيارات الشحن والدفع كبطاقات. :has(input:checked) تميّز البطاقة التي زرها مختار، بلا أي JavaScript. */
 .options { display: grid; gap: 10px; margin-bottom: 16px; }
 .option {
   border: 1.5px solid var(--line); border-radius: 14px; padding: 13px 16px; cursor: pointer;
@@ -298,6 +333,7 @@ h1, h2, h3, h4 { line-height: 1.4; }
 .option:hover { border-color: #cfd6e4; }
 .option:has(input:checked) { border-color: var(--orange); background: #fffaf4; box-shadow: 0 0 0 3px rgba(255, 122, 0, 0.1); }
 .option input { accent-color: var(--orange); width: 18px; height: 18px; }
+/* التنبيهات: خطأ (أحمر)، ومعلومة (أزرق)، ونجاح (أخضر). */
 .alert { border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; font-weight: 600; }
 .alert.error { background: var(--red-bg); color: var(--red); }
 .alert.info { background: #eaf1ff; color: var(--navy); }
@@ -305,7 +341,9 @@ h1, h2, h3, h4 { line-height: 1.4; }
 form.panel h3 { margin: 22px 0 12px; font-size: 17px; }
 form.panel h3:first-of-type { margin-top: 0; }
 
-/* ---------- orders + tracking ---------- */
+/* ---------- الطلبات والتتبع (orderCard في order-view.js) ---------- */
+/* لكل حالة طلب لونها (.status.pending ...). وشريط التقدم: أربع مراحل، وفوق كل مرحلة خط يرسمه
+ * ::before، ويصبح أخضر للمراحل التي وصلها الطلب (.done). */
 .order-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; margin-bottom: 14px; }
 .order-card .head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; align-items: center; }
 .order-id { font-family: Consolas, monospace; background: var(--surface); border-radius: 8px; padding: 2px 8px; font-size: 13px; direction: ltr; display: inline-block; word-break: break-all; }
@@ -323,20 +361,21 @@ form.panel h3:first-of-type { margin-top: 0; }
 .items-table td { padding: 8px 0; border-bottom: 1px solid var(--line); }
 .items-table td:last-child { text-align: left; white-space: nowrap; }
 
-/* ---------- account tabs ---------- */
+/* ---------- تبويبا الدخول والتسجيل في صفحة الحساب، والعمود الضيق (.narrow) للنماذج ---------- */
 .tabs { display: flex; gap: 6px; margin-bottom: 18px; background: var(--surface); padding: 5px; border-radius: 14px; }
 .tabs button { flex: 1; border: 0; background: transparent; border-radius: 10px; padding: 10px; font-weight: 700; cursor: pointer; color: var(--muted); }
 .tabs button.active { background: #fff; color: var(--navy); box-shadow: var(--shadow-sm); }
 .narrow { max-width: 480px; margin: 0 auto; }
 
-/* ---------- floating WhatsApp button ---------- */
+/* ---------- زر واتساب العائم (يظهر فقط إن ضُبط رقم في config.js) ---------- */
 .whatsapp {
   position: fixed; bottom: 20px; right: 20px; width: 56px; height: 56px; border-radius: 50%; z-index: 40;
   background: #25d366; color: #fff; display: grid; place-items: center; box-shadow: var(--shadow-lg); transition: transform 0.15s;
 }
 .whatsapp:hover { transform: scale(1.06); }
 
-/* ---------- toast ---------- */
+/* ---------- الإشعار الصغير (toast في ui.js) ---------- */
+/* مخفي أسفل الشاشة (opacity: 0)، والصنف .show يظهره بحركة ناعمة. pointer-events: none: لا يعيق الضغط على ما تحته. */
 .toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(30px); opacity: 0;
   background: var(--navy); color: #fff; padding: 12px 22px; border-radius: 14px; font-weight: 700;
@@ -345,7 +384,7 @@ form.panel h3:first-of-type { margin-top: 0; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast.error { background: var(--red); }
 
-/* ---------- footer ---------- */
+/* ---------- التذييل (يبنيه mountLayout في ui.js) ---------- */
 .site-footer { background: var(--navy); color: #b9c5db; margin-top: 56px; font-size: 14px; }
 .footer-grid { display: grid; gap: 28px; padding-block: 40px 28px; }
 .footer-logo { height: 38px; width: auto; margin-bottom: 12px; }
@@ -364,7 +403,9 @@ form.panel h3:first-of-type { margin-top: 0; }
 .footer-bottom .container { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding-block: 14px; }
 .muted-light { color: #8594b0; }
 
-/* ---------- larger screens ---------- */
+/* ---------- أحجام الشاشات (Responsive) ---------- */
+/* min-width: قواعد تُضاف عندما تكون الشاشة بهذا العرض أو أكبر (لوحي ثم حاسوب)، وهذا معنى "الهاتف أولاً".
+ * max-width: تعديلات للشاشات الصغيرة فقط، مثل إخفاء نص الروابط في الرأس وترك الأيقونات. */
 @media (min-width: 640px) {
   .grid { grid-template-columns: repeat(3, 1fr); gap: 16px; }
   .trust { grid-template-columns: repeat(4, 1fr); }
@@ -405,6 +446,7 @@ form.panel h3:first-of-type { margin-top: 0; }
   .amount { font-size: 18px; }
   .card .body { padding: 10px 12px 12px; }
 }
+/* من فعّل في نظامه خيار "تقليل الحركة" (لأسباب صحية مثلاً): نلغي كل الحركات والانتقالات. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; }
 }

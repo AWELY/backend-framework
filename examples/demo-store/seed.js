@@ -1,7 +1,8 @@
 const { CATEGORIES_REPOSITORY, PRODUCTS_REPOSITORY, INVENTORY_REPOSITORY } = require("commerce-framework");
 const { buildApp } = require("./app");
 
-// Sample catalogue for a small Libyan store. Prices in dirhams (1 LYD = 1000).
+// كتالوج تجريبي لمتجر ليبي صغير: 3 أقسام و 7 منتجات. الأسعار بالدرهم (1 دينار = 1000).
+// شاي النعناع مخزونه 0 عمداً، ليجرّب السيناريو إضافة منتج نفد (الخطوة 5 في scenario.js).
 const CATALOGUE = [
   {
     category: { name: "Coffee & Tea - قهوة وشاي", slug: "coffee-tea" },
@@ -27,8 +28,17 @@ const CATALOGUE = [
   },
 ];
 
-/** Idempotent: running it twice does not duplicate anything (matches on slug). */
+/**
+ * npm run seed: يملأ الكتالوج التجريبي.
+ *
+ * لا يكرر شيئاً إن شُغّل مرتين (Idempotent): يطابق الأقسام والمنتجات الموجودة بالـ slug
+ * ويتجاوزها.
+ *
+ * لاحظ أنه لا يستخدم الـ API ولا SQL مباشرة، بل يطلب مستودعات الوحدات من حاوية الـ DI.
+ * هذا مثال عملي على فائدة الرموز المصدّرة في src/index.ts.
+ */
 async function main() {
+  // "warn": سجل هادئ، فلا تظهر إلا التحذيرات والأخطاء.
   const { app } = buildApp("warn");
   const categories = app.container.resolve(CATEGORIES_REPOSITORY);
   const products = app.container.resolve(PRODUCTS_REPOSITORY);
@@ -37,6 +47,7 @@ async function main() {
 
   try {
     const existingCategories = await categories.findAll({ limit: 100 });
+    // includeInactive: نرى المنتجات المخفية أيضاً، حتى لا نعيد إنشاءها.
     const existingProducts = await products.list({ includeInactive: true, limit: 100, offset: 0 });
 
     for (const group of CATALOGUE) {

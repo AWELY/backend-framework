@@ -1,4 +1,5 @@
 const { join } = require("node:path");
+// ملف .env في مجلد storefront (المجلد الأعلى من api)، لا في مجلد التشغيل الحالي.
 require("dotenv").config({ quiet: true, path: join(__dirname, "..", ".env") });
 const {
   loadConfig,
@@ -10,13 +11,17 @@ const {
 } = require("commerce-framework");
 
 /**
- * AMA's whole back end: the framework does the work, this file only CONFIGURES
- * it for a small electronics store in Tajoura (Tripoli). Amounts are in dirhams
- * (1 LYD = 1000).
+ * الواجهة الخلفية لمتجر AMA كاملة. الإطار يقوم بكل العمل، وهذا الملف فقط "يضبط" الإطار
+ * لمتجر إلكترونيات صغير في تاجوراء (طرابلس). المبالغ بالدرهم (1 دينار = 1000).
+ *
+ * الإطار يصل إلى هنا كحزمة npm عادية (commerce-framework)، من المجلد الأعلى عبر
+ * "file:.." في storefront/package.json. أي أن المتجر يستخدم الإطار كمكتبة، تماماً كما
+ * سيستخدمه أي متجر آخر.
  */
 
-// Delivery price per city. Tajoura (where the shop is) is cheapest; the drop-down
-// on the website shows the cities in this order.
+// سعر التوصيل لكل مدينة. تاجوراء (حيث المحل) الأرخص. والقائمة المنسدلة في الموقع
+// تعرض المدن بهذا الترتيب نفسه (الإضافة تنشرها في GET /checkout/options).
+// المدينة غير المذكورة هنا لا يصلها التوصيل: إتمام الشراء إليها يُرفض بـ 400.
 const DELIVERY_RATES = {
   "تاجوراء": 5000,
   "طرابلس": 10000,
@@ -36,7 +41,12 @@ const DELIVERY_RATES = {
   "سبها": 50000,
 };
 
+/**
+ * يبني تطبيق المتجر. ثلاثة ملفات تستخدمها: index.js (التشغيل)، و migrate.js (الجداول)،
+ * و seed.js (البيانات الأولية). logLevel اختياري، وإلا يُقرأ من .env.
+ */
 function buildApp(logLevel) {
+  // الإعدادات بعد التحقق منها: يفشل هنا إن نقص متغير أو كان سر ضعيفاً.
   const config = loadConfig();
   const app = createCommerceApp({
     databaseUrl: config.databaseUrl,
@@ -45,8 +55,9 @@ function buildApp(logLevel) {
     corsOrigin: config.corsOrigin,
     trustProxy: config.trustProxy,
     logger: new Logger(logLevel ?? config.logLevel),
+    // الإضافات الثلاث التي اختارها هذا المتجر. متجر آخر يختار غيرها، دون تعديل الإطار.
     plugins: [
-      cityRateShipping({ name: "توصيل للمنزل", rates: DELIVERY_RATES, freeOver: 500000 }), // free over 500 LYD
+      cityRateShipping({ name: "توصيل للمنزل", rates: DELIVERY_RATES, freeOver: 500000 }), // مجاني فوق 500 دينار
       flatRateShipping({ id: "pickup", name: "استلام من المحل - تاجوراء", rate: 0 }),
       cashOnDelivery({
         name: "الدفع نقداً عند الاستلام",

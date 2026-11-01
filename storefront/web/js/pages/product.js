@@ -1,3 +1,5 @@
+// صفحة المنتج (product.html?id=<رقم المنتج>): الصورة، والسعر، والمخزون، واختيار الكمية،
+// وزرّا "أضف إلى السلة" و"اشترِ الآن"، ومنتجات مشابهة من نفس القسم.
 import { api, addToCart, ApiError } from "../api.js";
 import { mountLayout, esc, stockBadge, priceHtml, errorText, toast, refreshCartBadge, qs, icon, productCard, bindAddButtons, getCategories } from "../ui.js";
 
@@ -6,16 +8,19 @@ const app = document.getElementById("app");
 const id = qs("id");
 
 async function load() {
+  // رابط بلا id: نعامله كمنتج غير موجود.
   if (!id) throw new ApiError(404, "Not found");
+  // ثلاثة طلبات متوازية: المنتج، ومخزونه، والأقسام.
   const [product, stock, categories] = await Promise.all([
     api(`/products/${encodeURIComponent(id)}`),
     api(`/inventory/${encodeURIComponent(id)}`),
     getCategories(),
   ]);
   const category = categories.find((c) => c.id === product.categoryId);
+  // عنوان تبويب المتصفح. document.title نص عادي، فلا يحتاج esc.
   document.title = `${product.name} | AMA`;
 
-  // Up to 4 other products from the same category.
+  // حتى 4 منتجات أخرى من نفس القسم: نطلب 5 (قد يكون المنتج الحالي بينها) ونحذفه منها.
   const related = category
     ? (await api(`/products?categoryId=${encodeURIComponent(category.id)}&limit=5`)).filter((p) => p.id !== product.id).slice(0, 4)
     : [];
@@ -23,6 +28,8 @@ async function load() {
     await Promise.all(related.map(async (p) => [p.id, (await api(`/inventory/${p.id}`)).quantity]))
   );
 
+  // أقصى كمية يمكن اختيارها: المخزون، ولا أكثر من 10 في المرة الواحدة.
+  // الخادم يفحص المخزون مرة أخرى على أي حال، فهذا الحد لراحة المشتري فقط.
   const max = Math.min(stock.quantity, 10);
   app.innerHTML = `
     <nav class="breadcrumb"><a href="index.html">الرئيسية</a>
@@ -62,6 +69,7 @@ async function load() {
       <div class="grid" data-related>${related.map((p) => productCard(p, relatedStock.get(p.id) ?? 0)).join("")}</div>
     </section>` : ""}`;
 
+  // زرّا + و -: data-step فيه 1 أو -1، والنتيجة تبقى بين 1 و max.
   const input = app.querySelector("[data-qty]");
   app.querySelectorAll("[data-step]").forEach((b) =>
     b.addEventListener("click", () => {
@@ -69,9 +77,13 @@ async function load() {
       input.value = String(Math.min(max, Math.max(1, next)));
     })
   );
+  // الكمية المختارة، مصححة: رقم صحيح بين 1 و max، حتى لو كتب الزائر قيمة غريبة يدوياً.
   const quantity = () => Math.min(max, Math.max(1, Math.floor(Number(input.value) || 1)));
+  // نحفظ الزرين في متغيرين قبل أي await. (خطأ سابق في جدول 6.5: كان الكود يقرأ العنصر
+  // المضغوط بعد استدعاء غير متزامن، فيجده قد صار null.)
   const addButton = app.querySelector("[data-add]");
   const buyNow = app.querySelector("[data-buy-now]");
+  // "أضف إلى السلة": يبقى في الصفحة، ويحدّث رقم السلة في الرأس.
   addButton?.addEventListener("click", async () => {
     const n = quantity();
     addButton.disabled = true;
@@ -85,6 +97,7 @@ async function load() {
       addButton.disabled = false;
     }
   });
+  // "اشترِ الآن": يضيف ثم ينتقل مباشرة إلى السلة.
   buyNow?.addEventListener("click", async () => {
     buyNow.disabled = true;
     try {
@@ -99,6 +112,7 @@ async function load() {
   if (relatedGrid) bindAddButtons(relatedGrid);
 }
 
+// المنتج غير موجود (أو غير نشط، فالـ API يرد 404 للزبون): رسالة مختلفة عن فشل الاتصال.
 load().catch((err) => {
   const notFound = err instanceof ApiError && err.status === 404;
   app.innerHTML = `<div class="empty"><div class="big">${notFound ? "المنتج غير موجود" : "تعذّر تحميل المنتج"}</div>

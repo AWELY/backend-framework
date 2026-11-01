@@ -1,12 +1,20 @@
+// الصفحة الرئيسية (index.html): الواجهة، والأقسام، وشبكة المنتجات، والبحث، والترتيب.
+// نفس الصفحة تعرض ثلاث حالات حسب الرابط:
+//   index.html                  الرئيسية الكاملة (واجهة + مزايا + أقسام + كل المنتجات)
+//   index.html?category=<id>    منتجات قسم واحد
+//   index.html?q=<كلمة>         نتائج البحث
 import { api } from "../api.js";
 import { mountLayout, esc, errorText, qs, icon, productCard, bindAddButtons, getCategories } from "../ui.js";
 
+// الرأس والتذييل المشتركان، و "home" لتمييز رابط "كل المنتجات".
 mountLayout("home");
+// العنصر الذي تُرسم فيه الصفحة (<main id="app"> في index.html).
 const app = document.getElementById("app");
 
 const categoryId = qs("category");
 const search = (qs("q") ?? "").trim();
 
+// خيارات الترتيب. compare دالة مقارنة لـ sort: سالب يعني a أولاً، وموجب يعني b أولاً.
 const SORTS = {
   default: { label: "الترتيب الافتراضي", compare: () => 0 },
   "price-asc": { label: "السعر: من الأقل للأعلى", compare: (a, b) => a.price - b.price },
@@ -14,27 +22,32 @@ const SORTS = {
 };
 
 async function load() {
+  // طلبان في نفس الوقت (Promise.all) بدل واحد بعد الآخر: الأقسام والمنتجات.
   const [categories, products] = await Promise.all([
     getCategories(),
     api(`/products?limit=100${categoryId ? `&categoryId=${encodeURIComponent(categoryId)}` : ""}`),
   ]);
 
-  // The API filters by category; the text search runs here, over names and descriptions.
+  // الـ API يصفّي حسب القسم. أما البحث النصي فيحدث هنا في المتصفح، في الأسماء والأوصاف.
   const term = search.toLowerCase();
   const shown = term
     ? products.filter((p) => `${p.name} ${p.description ?? ""}`.toLowerCase().includes(term))
     : products;
 
-  // One stock lookup per product shown (a small catalogue - fine for this store).
+  // طلب مخزون واحد لكل منتج معروض. مقبول لكتالوج صغير مثل هذا المتجر، والطلبات متوازية.
+  // النتيجة Map: رقم المنتج وكميته.
   const stock = new Map(
     await Promise.all(shown.map(async (p) => [p.id, (await api(`/inventory/${p.id}`)).quantity]))
   );
+  // رقم القسم واسمه، لعرض اسم القسم على كل بطاقة.
   const categoryName = new Map(categories.map((c) => [c.id, c.name]));
 
   const current = categories.find((c) => c.id === categoryId);
+  // كلمة البحث كتبها الزائر في الرابط، فتمر عبر esc قبل وضعها في HTML (حماية من XSS).
   const title = search ? `نتائج البحث عن "${esc(search)}"` : current ? esc(current.name) : "كل المنتجات";
   const isHome = !search && !current;
 
+  // الرئيسية تعرض الواجهة والمزايا والأقسام، وصفحة القسم أو البحث تعرض مسار التنقل بدلها.
   app.innerHTML = `
     ${isHome ? hero() + trustBar() + categoryTiles(categories, products) : `
     <nav class="breadcrumb"><a href="index.html">الرئيسية</a> / ${search ? "البحث" : esc(current.name)}</nav>`}
@@ -57,6 +70,8 @@ async function load() {
         : `<div class="grid" data-grid></div>`}
     </section>`;
 
+  // يرسم بطاقات المنتجات بالترتيب المختار، ثم يربط أزرار "أضف إلى السلة".
+  // [...shown] نسخة، لأن sort تعدّل المصفوفة الأصلية. اسم القسم لا يُعرض داخل صفحة القسم نفسه.
   const grid = app.querySelector("[data-grid]");
   const renderGrid = (sortKey) => {
     if (!grid) return;
@@ -65,9 +80,11 @@ async function load() {
     bindAddButtons(grid);
   };
   renderGrid("default");
+  // تغيير الترتيب يعيد رسم الشبكة فقط، دون طلبات جديدة إلى الـ API.
   app.querySelector("[data-sort]")?.addEventListener("change", (e) => renderGrid(e.target.value));
 }
 
+/** الواجهة الكبيرة أعلى الرئيسية: العنوان والوصف وزرّان وصور منتجات. */
 function hero() {
   return `
     <section class="hero">
@@ -89,7 +106,9 @@ function hero() {
     </section>`;
 }
 
+/** شريط المزايا الأربع (التوصيل، والدفع عند الاستلام، والاستلام من المحل، والتوصيل المجاني). */
 function trustBar() {
+  // كل عنصر: [اسم الأيقونة، العنوان، السطر الصغير].
   const items = [
     ["truck", "توصيل لكل ليبيا", "من تاجوراء لكل المدن"],
     ["cash", "الدفع عند الاستلام", "ادفع نقداً للمندوب"],
@@ -100,6 +119,10 @@ function trustBar() {
     `<div class="trust-item"><span class="trust-icon">${icon(i, 24)}</span><div><b>${t}</b><span>${s}</span></div></div>`).join("")}</section>`;
 }
 
+/**
+ * مربعات الأقسام: لكل قسم صورة أول منتج فيه وعدد منتجاته. القسم الفارغ لا يظهر.
+ * "?." تعطي undefined بدل الخطأ إن لم يوجد منتج بصورة.
+ */
 function categoryTiles(categories, products) {
   const tiles = categories
     .map((c) => {
@@ -120,6 +143,7 @@ function categoryTiles(categories, products) {
     </section>`;
 }
 
+// إن فشل التحميل (مثلاً الـ API متوقف): رسالة واضحة وزر لإعادة المحاولة، بدل صفحة فارغة.
 load().catch((err) => {
   app.innerHTML = `<div class="empty"><div class="big">تعذّر تحميل المنتجات</div><p>${esc(errorText(err))}</p>
     <button class="btn" data-retry>إعادة المحاولة</button></div>`;

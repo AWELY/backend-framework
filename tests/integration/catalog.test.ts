@@ -1,7 +1,11 @@
+// اختبارات تكامل (Integration tests) للأقسام والمنتجات: الخادم الحقيقي، والقاعدة الحقيقية،
+// والطلبات عبر HTTP، تماماً كما يستخدمها الموقع.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { startTestApp, api, type TestApp } from "../helpers/test-app";
 
+// before: مرة واحدة قبل كل اختبارات الملف (تشغيل التطبيق على قاعدة نظيفة).
+// after: مرة واحدة بعدها (إغلاق الخادم والاتصالات).
 let t: TestApp;
 before(async () => {
   t = await startTestApp();
@@ -10,12 +14,14 @@ after(async () => {
   await t.close();
 });
 
+// المسار /health يصل إلى القاعدة فعلاً.
 test("health check reaches the database", async () => {
   const res = await api(t.base, "GET", "/health");
   assert.equal(res.status, 200);
   assert.equal(res.body.database, "ok");
 });
 
+// المالك ينشئ قسماً (201)، و slug مكرر يُرفض (409 من قيد UNIQUE)، والقراءة عامة.
 test("categories: owner creates, public reads, slug is unique", async () => {
   const created = await api(t.base, "POST", "/categories", { owner: true, body: { name: "Mugs", slug: "mugs" } });
   assert.equal(created.status, 201);
@@ -29,6 +35,7 @@ test("categories: owner creates, public reads, slug is unique", async () => {
   assert.equal(read.body.name, "Mugs");
 });
 
+// الكتابة تحتاج مفتاح المالك (بدونه أو بمفتاح خاطئ: 401)، و slug بشكل خاطئ أو حقل زائد: 400.
 test("writes require authentication and valid input", async () => {
   assert.equal((await api(t.base, "POST", "/categories", { body: { name: "A", slug: "a" } })).status, 401);
   assert.equal(
@@ -41,6 +48,8 @@ test("writes require authentication and valid input", async () => {
   assert.equal(extra.status, 400);
 });
 
+// قسم غير موجود يُرفض (400 من المفتاح الأجنبي). والمنتج غير النشط مخفي عن العامة في القائمة
+// وفي صفحته (404)، والمالك يراه. والتصفية بالقسم ترجع منتجات القسم فقط.
 test("products: category must exist, inactive products are hidden from the public", async () => {
   const cat = await api(t.base, "POST", "/categories", { owner: true, body: { name: "Plates", slug: "plates" } });
 
@@ -80,6 +89,7 @@ test("products: category must exist, inactive products are hidden from the publi
   );
 });
 
+// PATCH يغيّر الحقل المرسل فقط (السعر)، والاسم يبقى. ورقم ليس UUID يعطي 404، لا 500.
 test("products: PATCH updates only sent fields; bad ids are 404, not 500", async () => {
   const p = await api(t.base, "POST", "/products", { owner: true, body: { name: "Cup", slug: "cup", price: 100 } });
   const patched = await api(t.base, "PATCH", `/products/${p.body.id}`, { owner: true, body: { price: 150 } });
@@ -91,6 +101,7 @@ test("products: PATCH updates only sent fields; bad ids are 404, not 500", async
   assert.equal((await api(t.base, "DELETE", "/products/not-a-uuid", { owner: true })).status, 404);
 });
 
+// حذف القسم لا يحذف منتجاته، بل يجعل categoryId فيها null (ON DELETE SET NULL).
 test("deleting a category keeps its products and clears their categoryId", async () => {
   const cat = await api(t.base, "POST", "/categories", { owner: true, body: { name: "Temp", slug: "temp" } });
   const p = await api(t.base, "POST", "/products", {

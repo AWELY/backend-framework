@@ -7,9 +7,9 @@ const {
   flatRateShipping,
 } = require("commerce-framework");
 
-// The whole store API: categories, products, inventory, customers, carts and
-// orders, with auth, validation, logging and error handling, comes from
-// createCommerceApp. Run `npm run migrate` once before the first start.
+// الـ API الكامل للمتجر يأتي من createCommerceApp: الأقسام، والمنتجات، والمخزون، والزبائن،
+// والسلال، والطلبات، مع المصادقة، والتحقق من المدخلات، والسجل، ومعالجة الأخطاء.
+// شغّل npm run migrate مرة واحدة قبل أول تشغيل.
 async function main() {
   const config = loadConfig();
   const logger = new Logger(config.logLevel);
@@ -20,11 +20,11 @@ async function main() {
     corsOrigin: config.corsOrigin,
     trustProxy: config.trustProxy,
     logger,
-    // Plugins: payment and shipping methods offered at checkout.
-    // Amounts are in the smallest currency unit (1 LYD = 1000 dirhams).
+    // الإضافات: طرق الدفع والشحن التي تظهر عند إتمام الشراء.
+    // المبالغ بأصغر وحدة للعملة (1 دينار = 1000 درهم).
     plugins: [
       cashOnDelivery(),
-      flatRateShipping({ rate: 10000, freeOver: 200000 }), // 10 LYD, free over 200 LYD
+      flatRateShipping({ rate: 10000, freeOver: 200000 }), // 10 دنانير، ومجاني فوق 200 دينار
     ],
   });
   await app.listen(config.port);
