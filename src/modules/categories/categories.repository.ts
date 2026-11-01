@@ -8,6 +8,7 @@ interface CategoryRow {
   name: string;
   slug: string;
   description: string | null;
+  version: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -19,7 +20,7 @@ interface CategoryRow {
 export class CategoriesRepository extends Repository<Category, CategoryRow> {
   constructor(db: Queryable) {
     // اسم الجدول، والترتيب الافتراضي للقوائم: أبجدياً حسب الاسم.
-    super(db, "categories", "name ASC");
+    super(db, "categories", "name ASC", true);
   }
 
   /** صف القاعدة إلى كائن الـ API: created_at يصبح createdAt، وهكذا. */
@@ -29,6 +30,7 @@ export class CategoriesRepository extends Repository<Category, CategoryRow> {
       name: row.name,
       slug: row.slug,
       description: row.description,
+      version: row.version,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -49,8 +51,8 @@ export class CategoriesRepository extends Repository<Category, CategoryRow> {
   }
 
   /** تعديل جزئي: الحقول المسموح تعديلها وأعمدتها. انظر updateColumns في db/repository.ts. */
-  update(id: string, input: Partial<CategoryInput>): Promise<Category | null> {
-    return this.updateColumns(id, { name: "name", slug: "slug", description: "description" }, input);
+  update(id: string, input: Partial<CategoryInput>, expectedVersion?: number): Promise<Category | null> {
+    return this.updateColumns(id, { name: "name", slug: "slug", description: "description" }, input, expectedVersion);
   }
 }
 

@@ -3,18 +3,12 @@ import type { Queryable } from "../../db/repository";
 import { translateDbError } from "../../db/errors";
 import { isUuid } from "../../db/ids";
 import { createToken } from "../../container/tokens";
-import { ConflictError, NotFoundError } from "../../engine/errors";
-import type { StockLevel } from "./inventory.schema";
+import { ConflictError, ErrorCodes, NotFoundError } from "../../engine/errors";
+import type { StockLevel, VariantStockLevel } from "./inventory.schema";
 
 /**
- * مستودع المخزون: كمية لكل منتج.
- *
- * لا يرث من Repository، لأن جدوله مختلف: مفتاحه product_id (وليس id خاصاً به)،
- * وعملياته "اقرأ، واضبط، وعدّل بمقدار"، وليست إنشاء وقراءة وتعديل وحذف (CRUD).
- *
- * يمكن إنشاؤه باتصال معاملة (من withTransaction) عندما يجب أن يتغير المخزون مع كتابات
- * أخرى معاً. أهم مثال: وحدة الطلبات تنقص المخزون في نفس المعاملة التي تنشئ الطلب،
- * فإن فشل إنشاء الطلب، يرجع المخزون تلقائياً.
+ * مستودع المخزون. لا يرث Repository لأن جدوله مفتاحه product_id (أو variant_id) لا id،
+ * وعملياته (ضبط، وزيادة/إنقاص ذري) مختلفة عن CRUD العادي.
  */
 export class InventoryRepository {
   constructor(private readonly db: Queryable) {}
@@ -34,10 +28,8 @@ export class InventoryRepository {
   }
 
   /**
-   * كمية منتج موجود: 0 إن لم يُضبط مخزونه أبداً، و 404 إن لم يوجد المنتج نفسه.
-   *
-   * لماذا LEFT JOIN؟ نبدأ من جدول المنتجات: إن لم يوجد المنتج، لا صف أصلاً، فنعرف أنه 404.
-   * وإن وُجد بلا صف في inventory، يكون i.quantity قيمة NULL، و COALESCE تحوّلها إلى 0.
+   * مخزون منتج. المنتج الذي لا صف له في جدول المخزون كميته صفر (COALESCE).
+   * منتج غير موجود أصلاً يعطي 404 (وليس "صفر"، حتى لا يظن أحد أن المنتج موجود).
    */
   async get(productId: string): Promise<StockLevel> {
     if (!isUuid(productId)) throw new NotFoundError("Product not found");
@@ -52,10 +44,24 @@ export class InventoryRepository {
     return this.toLevel(productId, row.quantity);
   }
 
+  /** مخزون المنتج مع مخزون كل أشكاله (لصفحة المنتج: "هذا اللون نفد"). */
+  async levels(productId: string): Promise<StockLevel> {
+    const level = await this.get(productId);
+    const { rows } = await this.run<{ id: string; sku: string; quantity: number }>(
+      `SELECT v.id, v.sku, COALESCE(vi.quantity, 0) AS quantity
+         FROM product_variants v LEFT JOIN variant_inventory vi ON vi.variant_id = v.id
+        WHERE v.product_id = $1 ORDER BY v.position, v.created_at`,
+      [productId]
+    );
+    if (rows.length > 0) {
+      level.variants = rows.map((r) => ({ variantId: r.id, productId, sku: r.sku, quantity: r.quantity, inStock: r.quantity > 0 }));
+    }
+    return level;
+  }
+
   /**
-   * يضبط الكمية إلى رقم محدد.
-   * "INSERT ... ON CONFLICT DO UPDATE" (اسمه Upsert): إن لم يوجد صف للمنتج يُنشأ، وإن وُجد
-   * تُحدَّث كميته. و EXCLUDED.quantity هي القيمة التي حاولنا إدخالها.
+   * يضبط الكمية مباشرة. INSERT ... ON CONFLICT DO UPDATE: ينشئ صف المخزون إن لم يوجد،
+   * أو يحدّثه إن وُجد، في استعلام واحد (Upsert).
    */
   async set(productId: string, quantity: number): Promise<StockLevel> {
     await this.get(productId); // 404 للمنتج غير الموجود، قبل لمس جدول المخزون
@@ -69,22 +75,16 @@ export class InventoryRepository {
   }
 
   /**
-   * يضيف delta إلى الكمية (رقم سالب للإنقاص). أهم دالة لمنع البيع أكثر من المخزون.
+   * يزيد أو ينقص الكمية بمقدار delta، بتحديث ذري واحد:
+   *   UPDATE ... SET quantity = quantity + delta WHERE ... AND quantity + delta >= 0
    *
-   * الفحص والتعديل يحدثان في استعلام UPDATE واحد (عملية ذرية، Atomic):
-   *   UPDATE ... SET quantity = quantity + $2 WHERE product_id = $1 AND quantity + $2 >= 0
-   * إن كانت النتيجة ستصبح سالبة، لا يطابق الشرط أي صف، فلا يتغير شيء، ونرمي 409.
-   *
-   * لماذا لا نقرأ الكمية أولاً ثم نكتبها؟ لأن مشتريين لآخر قطعة في نفس اللحظة سيقرآن
-   * كلاهما "1"، ثم يكتب كلاهما "0"، فتُباع القطعة مرتين. أما هنا فالقاعدة تقفل الصف أثناء
-   * UPDATE، فينجح الأول، ويجد الثاني الكمية 0 فلا يطابق الشرط، ويحصل على 409.
-   * يثبته اختبار التزامن في tests/integration/inventory.test.ts: 10 مشترين في نفس اللحظة
-   * و 5 قطع في المخزون، فينجح 5 بالضبط، وينتهي المخزون عند 0.
+   * لماذا ليس "اقرأ الكمية، ثم احسب، ثم اكتب"؟ لأن طلبين متزامنين قد يقرآن نفس الكمية (1)،
+   * فيبيع كل منهما القطعة الأخيرة. التحديث الذري يحدث داخل القاعدة في خطوة واحدة مع قفل الصف:
+   * الطلب الثاني ينتظر الأول، ثم يجد الكمية 0 فلا يطابق الشرط، فلا يُحدَّث أي صف.
+   * لا صف محدّث يعني أن المخزون لا يكفي: 409 INSUFFICIENT_STOCK.
    */
   async adjust(productId: string, delta: number): Promise<StockLevel> {
     await this.get(productId);
-    // نتأكد أن للمنتج صفاً في المخزون (بكمية 0 افتراضياً)، حتى يجد UPDATE ما يعدّله.
-    // DO NOTHING: إن كان الصف موجوداً، لا نغير شيئاً.
     await this.run("INSERT INTO inventory (product_id) VALUES ($1) ON CONFLICT (product_id) DO NOTHING", [productId]);
     const { rows } = await this.run<{ quantity: number }>(
       `UPDATE inventory SET quantity = quantity + $2, updated_at = now()
@@ -93,14 +93,67 @@ export class InventoryRepository {
       [productId, delta]
     );
     const row = rows[0];
-    // لا صف رجع: الكمية لا تكفي. requested هي الكمية المطلوب سحبها (موجبة).
-    if (!row) throw new ConflictError("Insufficient stock", { productId, requested: -delta });
+    if (!row) throw new ConflictError("Insufficient stock", { productId, requested: -delta }, ErrorCodes.INSUFFICIENT_STOCK);
     return this.toLevel(productId, row.quantity);
+  }
+
+  /** مخزون شكل واحد. شكل غير موجود يعطي 404. */
+  async getVariant(variantId: string): Promise<VariantStockLevel> {
+    if (!isUuid(variantId)) throw new NotFoundError("Variant not found");
+    const { rows } = await this.run<{ product_id: string; sku: string; quantity: number }>(
+      `SELECT v.product_id, v.sku, COALESCE(vi.quantity, 0) AS quantity
+         FROM product_variants v LEFT JOIN variant_inventory vi ON vi.variant_id = v.id
+        WHERE v.id = $1`,
+      [variantId]
+    );
+    const row = rows[0];
+    if (!row) throw new NotFoundError("Variant not found");
+    return { variantId, productId: row.product_id, sku: row.sku, quantity: row.quantity, inStock: row.quantity > 0 };
+  }
+
+  /** يضبط مخزون شكل مباشرة. */
+  async setVariant(variantId: string, quantity: number): Promise<VariantStockLevel> {
+    const level = await this.getVariant(variantId);
+    await this.run(
+      `INSERT INTO variant_inventory (variant_id, quantity) VALUES ($1, $2)
+       ON CONFLICT (variant_id) DO UPDATE SET quantity = EXCLUDED.quantity, updated_at = now()`,
+      [variantId, quantity]
+    );
+    return { ...level, quantity, inStock: quantity > 0 };
+  }
+
+  /** نفس adjust، لمخزون شكل. */
+  async adjustVariant(variantId: string, delta: number): Promise<VariantStockLevel> {
+    const level = await this.getVariant(variantId);
+    await this.run("INSERT INTO variant_inventory (variant_id) VALUES ($1) ON CONFLICT (variant_id) DO NOTHING", [variantId]);
+    const { rows } = await this.run<{ quantity: number }>(
+      `UPDATE variant_inventory SET quantity = quantity + $2, updated_at = now()
+        WHERE variant_id = $1 AND quantity + $2 >= 0
+        RETURNING quantity`,
+      [variantId, delta]
+    );
+    const row = rows[0];
+    if (!row) {
+      throw new ConflictError("Insufficient stock", { productId: level.productId, variantId, requested: -delta }, ErrorCodes.INSUFFICIENT_STOCK);
+    }
+    return { ...level, quantity: row.quantity, inStock: row.quantity > 0 };
+  }
+
+  /** يغيّر مخزون سطر (منتج أو شكل) بمقدار delta. تستخدمه الطلبات عند الشراء والإلغاء والإرجاع. */
+  adjustLine(line: { productId: string; variantId: string | null }, delta: number): Promise<unknown> {
+    return line.variantId ? this.adjustVariant(line.variantId, delta) : this.adjust(line.productId, delta);
   }
 }
 
 /**
- * رمز المستودع في الحاوية. تطلبه السلة لفحص المخزون عند الإضافة. أما خدمة الطلبات فتنشئ
- * نسخة خاصة بها باتصال المعاملة: new InventoryRepository(client)، لتكون جزءاً من معاملة الشراء.
+ * ترتيب أقفال المخزون: كل معاملة تلمس عدة صفوف مخزون (الشراء، والإلغاء، والإرجاع) يجب أن تقفلها
+ * بنفس الترتيب. لو قفلت معاملة المنتج A ثم B، وأخرى B ثم A في نفس اللحظة، لانتظرت كل منهما الأخرى
+ * للأبد (Deadlock)، فيلغي PostgreSQL إحداهما. قسنا هذا قبل الإصلاح: 60 شراء متزامن بترتيب معاكس،
+ * فشل منها 51 بخطأ 500. الترتيب الثابت (برقم المنتج ثم رقم الشكل) يجعل الانتظار في صف واحد لا دائرة.
  */
+export function byStockLockOrder<T extends { productId: string; variantId: string | null }>(a: T, b: T): number {
+  return a.productId < b.productId ? -1 : a.productId > b.productId ? 1 : (a.variantId ?? "") < (b.variantId ?? "") ? -1 : (a.variantId ?? "") > (b.variantId ?? "") ? 1 : 0;
+}
+
+/** رمز المستودع في الحاوية. */
 export const INVENTORY_REPOSITORY = createToken<InventoryRepository>("InventoryRepository");

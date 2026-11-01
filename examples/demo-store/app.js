@@ -5,7 +5,7 @@ const {
   createCommerceApp,
   cashOnDelivery,
   flatRateShipping,
-} = require("commerce-framework");
+} = require("maa");
 
 /**
  * إعداد المتجر التجريبي كاملاً، وهو الكود الوحيد الخاص بالإطار في هذا المشروع.

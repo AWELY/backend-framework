@@ -76,7 +76,7 @@ async function main() {
   if (reg.status === 429) {
     throw new Error(
       "Registration limit reached (5 new accounts per hour per IP - the framework's anti-abuse limit). " +
-        "Restart the demo store (the counter lives in memory) or wait, then run the scenario again."
+        "Wait for the limit window to pass (the counters are shared in PostgreSQL), or reset the database, then run the scenario again."
     );
   }
   show("Register a customer account", reg, `customer ${reg.body.customer.email}, token issued`);

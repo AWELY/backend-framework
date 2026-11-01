@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { startTestApp, api, type TestApp } from "../helpers/test-app";
 import { cashOnDelivery, cityRateShipping } from "../../src/index";
 
-// ميزات أُضيفت للإطار من أجل متجر AMA: صور المنتجات، والتوصيل بسعر حسب المدينة.
+// ميزات أُضيفت للإطار من أجل متجر ماء: صور المنتجات، والتوصيل بسعر حسب المدينة.
 // المتجر هنا بثلاث مدن (بأسماء عربية) وتوصيل مجاني فوق 500 دينار، والدفع عند الاستلام.
 let t: TestApp;
 before(async () => {

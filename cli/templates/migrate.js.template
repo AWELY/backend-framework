@@ -1,15 +1,16 @@
 require("dotenv").config({ quiet: true });
-const { loadConfig, Logger, createCommerceApp } = require("commerce-framework");
+const { loadConfig, createCommerceApp, optionsFromConfig, cashOnDelivery, flatRateShipping, coupons } = require("maa");
 
-// ينشئ جداول هذا المتجر أو يحدّثها. تشغيله مرة ثانية آمن: الـ migrations المطبّقة
-// من قبل تُتجاوز.
+/**
+ * يطبّق جداول الإطار والوحدات والإضافات التي لم تُطبَّق بعد (آمن عند التكرار).
+ * الإضافات هنا نفسها التي في index.js، لأن بعضها له جداول (مثل coupons).
+ */
 async function main() {
   const config = loadConfig();
   const app = createCommerceApp({
-    databaseUrl: config.databaseUrl,
-    ownerApiKey: config.ownerApiKey,
-    authTokenSecret: config.authTokenSecret,
-    logger: new Logger("info"),
+    ...optionsFromConfig(config),
+    workers: false,
+    plugins: [cashOnDelivery(), flatRateShipping({ rate: 10000 }), coupons()],
   });
   try {
     const applied = await app.migrate();

@@ -6,5 +6,9 @@
     "declaration": false,
     "sourceMap": false
   },
-  "include": ["src/**/*", "tests/**/*"]
+  "include": [
+    "src/**/*",
+    "tests/**/*",
+    "examples/plugins/**/*"
+  ]
 }

@@ -1,16 +1,18 @@
-// أين يوجد الـ API الخاص بالمتجر. الافتراضي: نفس عنوان الموقع، على المنفذ 3000.
-// غيّر API_PORT لإعداد آخر، أو اضبط window.AMA_API_BASE قبل تحميل السكربتات
-// (يستخدمه اختبار المتصفح ليوجّه الموقع إلى API تجريبي على منفذ آخر).
+/**
+ * إعدادات الموقع في مكان واحد.
+ *
+ * API_BASE: عنوان الـ API. الافتراضي نفس اسم الخادم على المنفذ 3000، فيعمل على الجهاز
+ * (localhost) وعلى أي عنوان في الشبكة المحلية دون تعديل. يمكن تغييره بتعريف window.MAA_API_BASE.
+ */
 const API_PORT = 3000;
 
-export const API_BASE = window.AMA_API_BASE ?? `${location.protocol}//${location.hostname}:${API_PORT}`;
+export const API_BASE = window.MAA_API_BASE ?? `${location.protocol}//${location.hostname}:${API_PORT}`;
 
-// معلومات المتجر التي تظهر في الصفحات (الرأس والتذييل).
+/** بيانات المتجر التي تظهر في الرأس والتذييل. */
 export const STORE = {
-  name: "AMA",
+  name: "متجر ماء",
+  latinName: "Maa Store",
   tagline: "إلكترونيات وإكسسوارات الهواتف",
   address: "طرابلس - تاجوراء",
-  // رقم واتساب بالصيغة الدولية دون "+"، مثل "2189XXXXXXXX".
-  // إن بقي فارغاً يختفي زر واتساب.
   whatsapp: "",
 };

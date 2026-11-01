@@ -2,7 +2,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { startTestApp, type TestApp } from "../helpers/test-app";
 
-// اختبارات انحدار (Regression tests) لخطأ حقيقي اكتُشف بتشغيل متصفح حقيقي على موقع AMA
+// اختبارات انحدار (Regression tests) لخطأ حقيقي اكتُشف بتشغيل متصفح حقيقي على موقع متجر ماء
 // (الخطأ رقم 1 في جدول 6.5): كان الخادم يبحث عن المسار قبل تشغيل المعالجات العامة، فكان طلب
 // CORS التمهيدي (OPTIONS، ولا مسار له) يحصل على 404 مجرد، فيمنع المتصفح كل طلب JSON من الموقع
 // (مثل "أضف إلى السلة"). هذه الاختبارات تضمن ألا يعود الخطأ أبداً.

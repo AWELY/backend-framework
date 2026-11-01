@@ -1,4 +1,4 @@
-const { CATEGORIES_REPOSITORY, PRODUCTS_REPOSITORY, INVENTORY_REPOSITORY } = require("commerce-framework");
+const { CATEGORIES_REPOSITORY, PRODUCTS_REPOSITORY, INVENTORY_REPOSITORY } = require("maa");
 const { buildApp } = require("./app");
 
 // كتالوج تجريبي لمتجر ليبي صغير: 3 أقسام و 7 منتجات. الأسعار بالدرهم (1 دينار = 1000).

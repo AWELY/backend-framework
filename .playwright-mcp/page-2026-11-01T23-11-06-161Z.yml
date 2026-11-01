@@ -1,0 +1,46 @@
+- generic:
+  - banner:
+    - link:
+      - /url: index.html
+      - generic: تطبيق المندوب
+    - generic:
+      - generic: سالم المندوب
+      - generic: مندوب
+      - button: خروج
+  - main:
+    - heading [level=1]: توصيلاتي
+    - generic:
+      - button: الحالية
+      - button: المسلّمة
+    - article:
+      - generic:
+        - generic: فاطمة الزنتاني
+        - generic: مع المندوب
+      - generic: تاجوراء — سوق الجمعة، قرب المدرسة
+      - generic:
+        - link:
+          - /url: tel:0925556677
+          - text: "0925556677"
+        - link:
+          - /url: https://www.google.com/maps/search/?api=1&query=%D8%AA%D8%A7%D8%AC%D9%88%D8%B1%D8%A7%D8%A1%20%E2%80%94%20%D8%B3%D9%88%D9%82%20%D8%A7%D9%84%D8%AC%D9%85%D8%B9%D8%A9%D8%8C%20%D9%82%D8%B1%D8%A8%20%D8%A7%D9%84%D9%85%D8%AF%D8%B1%D8%B3%D8%A9
+          - text: الخريطة
+        - generic: طلب 51dc44d4 — 2 قطعة
+      - generic: "حصّل: 225 د.ل"
+      - generic:
+        - button: تم التسليم
+        - button: تعذّر التوصيل
+    - button: تحديث
+  - status: تم تسجيل الاستلام. الزبون يرى أن الطلب في الطريق.
+  - dialog [ref=f10e47]:
+    - generic [ref=f10e48]:
+      - heading "تأكيد التسليم" [level=2] [ref=f10e49]
+      - button "إغلاق" [active] [ref=f10e50] [cursor=pointer]: ×
+    - generic [ref=f10e52]:
+      - generic [ref=f10e53]:
+        - generic [ref=f10e54]: المبلغ المحصّل (دينار)
+        - spinbutton "المبلغ المحصّل (دينار)" [ref=f10e55]: "225"
+      - generic [ref=f10e56]:
+        - generic [ref=f10e57]: ملاحظة (اختياري)
+        - textbox "ملاحظة (اختياري)" [ref=f10e58]:
+          - /placeholder: "مثال: سُلّم للحارس"
+      - button "تأكيد التسليم" [ref=f10e59] [cursor=pointer]

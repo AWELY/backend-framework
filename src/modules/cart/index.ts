@@ -1,102 +1,153 @@
 import type { CommerceModule } from "../types";
-import { validateBody } from "../../middleware/validate";
-import { ConflictError, NotFoundError } from "../../engine/errors";
+import { withInput } from "../../middleware/validate";
+import { ConflictError, ErrorCodes, NotFoundError, TooManyRequestsError, ValidationError } from "../../engine/errors";
 import { PRODUCTS_REPOSITORY } from "../products/products.repository";
 import { INVENTORY_REPOSITORY } from "../inventory/inventory.repository";
-import { cartMigrations, addItemSchema, setItemSchema } from "./cart.schema";
+import { cartMigrations, addItemSchema, setItemSchema, lineQuery } from "./cart.schema";
 import { CartRepository, CART_REPOSITORY } from "./cart.repository";
 import { assertCartAccess, assertCartOpen } from "./cart.access";
+import { ID_PARAMS } from "../shared";
+
+const LINE_PARAMS = { id: { type: "string", maxLength: 100 }, productId: { type: "string", maxLength: 100 } } as const;
+
+/** كم يوماً تبقى سلة الضيف المتروكة قبل أن يحذفها التنظيف اليومي. */
+const ABANDONED_CART_DAYS = 30;
 
 /**
- * وحدة سلة التسوق. تعمل للضيف وللزبون المسجل دخوله معاً.
+ * وحدة السلة: للضيف وللزبون المسجل.
  *
  * المسارات:
- *   POST   /carts                           إنشاء سلة (تُربط بالزبون إن كان مسجل الدخول)
- *   GET    /carts/:id                       قراءة السلة بسطورها ومجموعها
- *   POST   /carts/:id/items                 بجسم { productId, quantity }: يضيف الكمية إلى السطر
- *   PUT    /carts/:id/items/:productId      بجسم { quantity }: يضبط كمية السطر (0 تحذفه)
- *   DELETE /carts/:id/items/:productId      يحذف السطر
+ *   POST   /carts                         ينشئ سلة (للضيف أو للزبون المسجل). حد اختياري لكل IP
+ *   GET    /carts/mine                    الزبون: أحدث سلة مفتوحة له (204 إن لم توجد)
+ *   GET    /carts/:id                     السلة مع سطورها
+ *   POST   /carts/:id/items               يضيف { productId, variantId?, quantity } (يُجمع مع الموجود)
+ *   PUT    /carts/:id/items/:productId    يضبط الكمية { quantity } (0 تحذف). ?variantId= للشكل
+ *   DELETE /carts/:id/items/:productId    يحذف السطر. ?variantId= للشكل
  *
- * المخزون يُفحص عند الإضافة (ليعرف المشتري فوراً إن كانت الكمية لا تكفي)، لكنه لا يُحجز
- * إلا عند إتمام الشراء (وحدة الطلبات)، داخل نفس المعاملة التي تنشئ الطلب. سلة متروكة
- * لا تحجز مخزوناً عن الآخرين.
+ * الإضافة تفحص: المنتج موجود ونشط، والشكل (إن وُجد) يتبعه ونشط، والمنتج ذو الأشكال لا يُضاف
+ * دون شكل (VARIANT_REQUIRED)، والمخزون يكفي للكمية الجديدة كلها. الفحص النهائي للمخزون يحدث
+ * عند الشراء داخل معاملة (الكمية قد تنفد بين الإضافة والشراء).
  *
- * تعتمد على المنتجات والمخزون، وقد سُجّلتا قبلها (الترتيب في modules/index.ts).
+ * مهمة يومية (cart.cleanupAbandoned) تحذف سلال الضيوف التي لم تتغير منذ 30 يوماً.
  */
 export const cartModule: CommerceModule = {
   name: "cart",
   migrations: cartMigrations,
 
-  register({ router, container, pool, accessControl, authenticateOptional }) {
+  register({ router, container, pool, accessControl, authenticate, authenticateOptional, limiters, clientIp, jobs }) {
     container.register(CART_REPOSITORY, () => new CartRepository(pool));
     const carts = () => container.resolve(CART_REPOSITORY);
-    // خدمات وحدتين أخريين، نطلبهما من الحاوية بدل إنشائهما هنا (حقن الاعتماديات).
     const products = () => container.resolve(PRODUCTS_REPOSITORY);
     const inventory = () => container.resolve(INVENTORY_REPOSITORY);
 
-    /**
-     * يتأكد أن المنتج موجود، ومعروض للبيع (نشط)، وأن المخزون يكفي للكمية الجديدة للسطر.
-     * المنتج غير النشط يُعامل كغير موجود (404). المخزون غير الكافي يعطي 409 مع
-     * المتوفر والمطلوب، فيستطيع الموقع أن يقول "المتوفر 3 فقط".
-     */
-    async function assertPurchasable(productId: string, lineQuantity: number): Promise<void> {
+    jobs.define("cart.cleanupAbandoned", async (_payload, { logger }) => {
+      const deleted = await carts().deleteAbandoned(ABANDONED_CART_DAYS);
+      if (deleted > 0) logger.info(`Deleted ${deleted} abandoned guest cart(s)`);
+    });
+    jobs.schedule("cart.cleanupAbandoned", 24 * 60 * 60 * 1000);
+
+    /** هل يمكن شراء lineQuantity من هذا المنتج (أو الشكل)؟ يرمي الخطأ المناسب إن لا. */
+    async function assertPurchasable(productId: string, variantId: string | null, lineQuantity: number): Promise<void> {
       const product = await products().findById(productId);
       if (!product || !product.isActive) throw new NotFoundError("Product not found");
-      const stock = await inventory().get(productId);
-      if (stock.quantity < lineQuantity) {
-        throw new ConflictError("Insufficient stock", { productId, available: stock.quantity, requested: lineQuantity });
+      let available: number;
+      if (variantId) {
+        const variant = await products().findVariant(productId, variantId);
+        if (!variant || !variant.isActive) throw new NotFoundError("Variant not found");
+        available = (await inventory().getVariant(variantId)).quantity;
+      } else {
+        if (await products().hasActiveVariants(productId)) {
+          throw new ValidationError(
+            "This product has variants: choose one",
+            [{ field: "variantId", message: "is required for this product" }],
+            ErrorCodes.VARIANT_REQUIRED
+          );
+        }
+        available = (await inventory().get(productId)).quantity;
+      }
+      if (available < lineQuantity) {
+        throw new ConflictError(
+          "Insufficient stock",
+          { productId, variantId, available, requested: lineQuantity },
+          ErrorCodes.INSUFFICIENT_STOCK
+        );
       }
     }
 
-    // إنشاء سلة. نمرر "سلة ضيف" مؤقتة إلى assertCartAccess فقط لنعيد استخدام فحص
-    // الصلاحية: إن كان المرسل معروفاً، يجب أن يملك cart:manage.
-    router.post("/carts", authenticateOptional, async (req, res) => {
-      assertCartAccess(req, { id: "", customerId: null, status: "open" }, accessControl);
-      // الزبون المسجل تُربط السلة بحسابه. الضيف والمالك يحصلان على سلة غير مربوطة (null).
-      const customerId = req.auth?.role === "customer" ? (req.auth.userId ?? null) : null;
-      res.status(201).json(await carts().create(customerId));
-    });
+    router.post(
+      "/carts",
+      authenticateOptional,
+      withInput({ summary: "Create a cart", successStatus: 201 }, async (req, res) => {
+        assertCartAccess(req, { id: "", customerId: null, status: "open" }, accessControl);
+        if (limiters.cartCreation) {
+          const wait = await limiters.cartCreation.consume(`ip:${clientIp(req)}`);
+          if (wait > 0) throw new TooManyRequestsError("Too many carts created from this address. Try again later.", wait);
+        }
+        const customerId = req.auth?.principal === "customer" ? (req.auth.userId ?? null) : null;
+        res.status(201).json(await carts().create(customerId));
+      })
+    );
 
-    // قراءة السلة، بعد التأكد أن المرسل يحق له رؤيتها (وإلا 404).
-    router.get("/carts/:id", authenticateOptional, async (req, res) => {
-      const id = req.params.id as string;
-      assertCartAccess(req, await carts().findHeader(id), accessControl);
-      res.json(await carts().findById(id));
-    });
+    // "لا سلة" ليست خطأ هنا (الزبون اشترى للتو، أو لم يضف شيئاً بعد): 204 بلا جسم، لا 404.
+    router.get(
+      "/carts/mine",
+      authenticate,
+      withInput({ summary: "The logged-in customer's open cart (204 when there is none)" }, async (req, res) => {
+        if (req.auth?.principal !== "customer" || !req.auth.userId) throw new NotFoundError("Cart not found");
+        const cart = await carts().findOpenForCustomer(req.auth.userId);
+        if (!cart) {
+          res.status(204).end();
+          return;
+        }
+        res.json(cart);
+      })
+    );
 
-    /**
-     * إضافة منتج: الكمية تُضاف إلى الموجود في السطر.
-     * مثال: في السلة قطعتان، والطلب يضيف 3، فالسطر يصبح 5، ونفحص المخزون مقابل 5 لا 3.
-     */
-    router.post("/carts/:id/items", authenticateOptional, validateBody(addItemSchema), async (req, res) => {
-      const id = req.params.id as string;
-      // الترتيب: موجودة؟ ويحق لك؟ (assertCartAccess)، ثم ما زالت مفتوحة؟ (assertCartOpen)
-      assertCartOpen(assertCartAccess(req, await carts().findHeader(id), accessControl));
-      const { productId, quantity } = req.body as { productId: string; quantity: number };
-      const newQuantity = (await carts().quantityOf(id, productId)) + quantity;
-      await assertPurchasable(productId, newQuantity);
-      await carts().setLine(id, productId, newQuantity);
-      // نرجع السلة كاملة بعد التعديل، فيحدّث الموقع عرضه برد واحد.
-      res.json(await carts().findById(id));
-    });
+    router.get(
+      "/carts/:id",
+      authenticateOptional,
+      withInput({ params: ID_PARAMS, summary: "Get a cart" }, async (req, res, { params }) => {
+        assertCartAccess(req, await carts().findHeader(params.id), accessControl);
+        res.json(await carts().findById(params.id));
+      })
+    );
 
-    // ضبط كمية سطر إلى رقم محدد. 0 تحذفه، ولا حاجة لفحص المخزون عند الحذف.
-    router.put("/carts/:id/items/:productId", authenticateOptional, validateBody(setItemSchema), async (req, res) => {
-      const id = req.params.id as string;
-      const productId = req.params.productId as string;
-      assertCartOpen(assertCartAccess(req, await carts().findHeader(id), accessControl));
-      const { quantity } = req.body as { quantity: number };
-      if (quantity > 0) await assertPurchasable(productId, quantity);
-      await carts().setLine(id, productId, quantity);
-      res.json(await carts().findById(id));
-    });
+    router.post(
+      "/carts/:id/items",
+      authenticateOptional,
+      withInput({ params: ID_PARAMS, body: addItemSchema, summary: "Add a product (or variant) to a cart" }, async (req, res, { params, body }) => {
+        assertCartOpen(assertCartAccess(req, await carts().findHeader(params.id), accessControl));
+        const variantId = body.variantId ?? null;
+        const newQuantity = (await carts().quantityOf(params.id, body.productId, variantId)) + body.quantity;
+        await assertPurchasable(body.productId, variantId, newQuantity);
+        await carts().setLine(params.id, body.productId, newQuantity, variantId);
+        res.json(await carts().findById(params.id));
+      })
+    );
 
-    // حذف سطر: نفس ضبط الكمية إلى 0.
-    router.delete("/carts/:id/items/:productId", authenticateOptional, async (req, res) => {
-      const id = req.params.id as string;
-      assertCartOpen(assertCartAccess(req, await carts().findHeader(id), accessControl));
-      await carts().setLine(id, req.params.productId as string, 0);
-      res.json(await carts().findById(id));
-    });
+    router.put(
+      "/carts/:id/items/:productId",
+      authenticateOptional,
+      withInput(
+        { params: LINE_PARAMS, query: lineQuery, body: setItemSchema, summary: "Set the quantity of a cart line (0 removes it)" },
+        async (req, res, { params, query, body }) => {
+          assertCartOpen(assertCartAccess(req, await carts().findHeader(params.id), accessControl));
+          const variantId = query.variantId ?? null;
+          if (body.quantity > 0) await assertPurchasable(params.productId, variantId, body.quantity);
+          await carts().setLine(params.id, params.productId, body.quantity, variantId);
+          res.json(await carts().findById(params.id));
+        }
+      )
+    );
+
+    router.delete(
+      "/carts/:id/items/:productId",
+      authenticateOptional,
+      withInput({ params: LINE_PARAMS, query: lineQuery, summary: "Remove a cart line" }, async (req, res, { params, query }) => {
+        assertCartOpen(assertCartAccess(req, await carts().findHeader(params.id), accessControl));
+        await carts().setLine(params.id, params.productId, 0, query.variantId ?? null);
+        res.json(await carts().findById(params.id));
+      })
+    );
   },
 };

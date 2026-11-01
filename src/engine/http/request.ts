@@ -1,4 +1,5 @@
 import type { IncomingMessage } from "node:http";
+import type { Logger } from "../logger";
 
 /**
  * شكل الطلب كما يصل إلى أي معالج في الإطار (middleware أو handler).
@@ -8,7 +9,7 @@ import type { IncomingMessage } from "node:http";
  *   - url:     المسار مع الاستعلام، مثل "/products/1?color=red".
  *   - headers: الترويسات، وأسماؤها بحروف صغيرة دائماً، مثل headers["content-type"].
  *
- * و AppRequest هو نفس الطلب (extends) مضافاً إليه أربعة حقول، يملؤها الإطار
+ * و AppRequest هو نفس الطلب (extends) مضافاً إليه حقول، يملؤها الإطار
  * قبل أن يصل الطلب إلى أي handler.
  *
  * هذا الملف أنواع فقط: TypeScript يستخدمه للفحص ثم يحذفه عند الترجمة،
@@ -41,5 +42,27 @@ export interface AppRequest extends IncomingMessage {
    *   - الزبون (بتوكن Bearer) تكون قيمته { role: "customer", userId: "..." }
    * علامة "?" تعني أنه اختياري: لا يوجد للضيف، ولا في المسارات التي لا تحتاج مصادقة.
    */
-  auth?: { role: string; userId?: string };
+  auth?: {
+    role: string;
+    userId?: string;
+    /** نوع المرسل: المالك (بالمفتاح)، أو زبون، أو موظف. */
+    principal?: "owner" | "customer" | "staff";
+    /** رقم جلسة الدخول (للزبون والموظف)، يستخدمه تسجيل الخروج لإلغاء هذه الجلسة وحدها. */
+    sessionId?: string;
+  };
+  /**
+   * رقم فريد لهذا الطلب، يضعه server.ts: من ترويسة X-Request-Id إن أرسلها العميل أو الـ proxy
+   * بصيغة صحيحة، وإلا رقم جديد. يعود في ترويسة الرد، وفي جسم أي خطأ، وفي كل سطر سجل للطلب،
+   * فيمكن تتبع شكوى زبون ("رقم الطلب في رسالة الخطأ هو ...") حتى سطر السجل نفسه.
+   */
+  id: string;
+  /** سجل فرعي يضيف requestId إلى كل سطر (engine/logger.ts). */
+  log: Logger;
+  /**
+   * الجسم كما وصل، بايتات خاماً قبل JSON.parse. تحتاجه إضافات الدفع للتحقق من توقيع الـ webhook:
+   * التوقيع محسوب على البايتات الأصلية، وأي إعادة بناء للـ JSON (ترتيب مفاتيح، مسافات) تكسره.
+   */
+  rawBody?: Buffer;
+  /** المسار المسجّل الذي طابق، مثل "/products/:id" (للسجل والمقاييس والتدقيق). */
+  route?: string;
 }

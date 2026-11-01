@@ -1,6 +1,6 @@
 import type { AppRequest } from "../../engine/http/request";
 import type { AccessControl } from "../../engine/access-control";
-import { ConflictError, ForbiddenError, NotFoundError } from "../../engine/errors";
+import { ConflictError, ErrorCodes, ForbiddenError, NotFoundError } from "../../engine/errors";
 import type { CartHeader } from "./cart.schema";
 
 /**
@@ -35,5 +35,5 @@ export function assertCartAccess(req: AppRequest, cart: CartHeader | null, acces
  * محتواها بعد أن أصبح طلباً. الرد 409: تعارض مع حالتها الحالية.
  */
 export function assertCartOpen(cart: CartHeader): void {
-  if (cart.status !== "open") throw new ConflictError("This cart has already been checked out");
+  if (cart.status !== "open") throw new ConflictError("This cart has already been checked out", undefined, ErrorCodes.CART_CHECKED_OUT);
 }

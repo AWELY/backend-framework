@@ -35,7 +35,25 @@ interface Entry {
   resetAt: number;
 }
 
-export class FailureLimiter {
+/**
+ * الواجهة المشتركة لكل أنواع حد المحاولات: في الذاكرة (FailureLimiter أدناه)، أو في PostgreSQL
+ * (src/runtime/rate-limit.ts، الافتراضي في التطبيق لأنه يعمل عبر عدة نسخ من الخادم).
+ * الدوال قد ترجع قيمة مباشرة أو Promise، والمستدعي يكتب await في الحالتين.
+ */
+export interface Limiter {
+  retryAfter(key: string): number | Promise<number>;
+  recordFailure(key: string): void | Promise<void>;
+  recordAttempt(key: string): void | Promise<void>;
+  reset(key: string): void | Promise<void>;
+  /**
+   * يسجّل محاولة ويقرر في خطوة واحدة ذرية: يرجع 0 إن كانت المحاولة مسموحة، أو عدد ثواني الانتظار.
+   * للحدود التي تعدّ كل محاولة (التسجيل، والشراء، وإنشاء السلال). الفحص ثم التسجيل في خطوتين
+   * يسمح لعشرة طلبات متزامنة أن تمر كلها من الفحص قبل أن يُسجَّل أي منها.
+   */
+  consume(key: string): number | Promise<number>;
+}
+
+export class FailureLimiter implements Limiter {
   // المفتاح وحالته. Map تحفظ ترتيب الإضافة، ونستفيد من هذا في prune.
   private readonly entries = new Map<string, Entry>();
   private readonly maxKeys: number;
@@ -91,6 +109,14 @@ export class FailureLimiter {
    */
   recordAttempt(key: string): void {
     this.recordFailure(key);
+  }
+
+  /** يفحص ثم يسجّل. في الذاكرة الخطوتان متزامنتان (لا await بينهما)، فهما ذريتان أصلاً. */
+  consume(key: string): number {
+    const wait = this.retryAfter(key);
+    if (wait > 0) return wait;
+    this.recordAttempt(key);
+    return 0;
   }
 
   /** يمسح عدّاد المفتاح، مثلاً بعد دخول ناجح يُمسح عدّاد البريد (وليس عدّاد العنوان). */

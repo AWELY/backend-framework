@@ -1,27 +1,32 @@
 const { join } = require("node:path");
-// ملف .env في مجلد storefront (المجلد الأعلى من api)، لا في مجلد التشغيل الحالي.
 require("dotenv").config({ quiet: true, path: join(__dirname, "..", ".env") });
+const { createHash } = require("node:crypto");
 const {
   loadConfig,
   Logger,
   createCommerceApp,
+  optionsFromConfig,
   cashOnDelivery,
   cityRateShipping,
   flatRateShipping,
-} = require("commerce-framework");
+  coupons,
+} = require("maa");
+const { demoCardGateway } = require("./plugins/demo-card-gateway");
+const { devMailbox } = require("./plugins/dev-mailbox");
 
 /**
- * الواجهة الخلفية لمتجر AMA كاملة. الإطار يقوم بكل العمل، وهذا الملف فقط "يضبط" الإطار
- * لمتجر إلكترونيات صغير في تاجوراء (طرابلس). المبالغ بالدرهم (1 دينار = 1000).
+ * الـ API الخاص بمتجر ماء (Maa Store): تطبيق واحد من الإطار مع إضافات المتجر.
  *
- * الإطار يصل إلى هنا كحزمة npm عادية (commerce-framework)، من المجلد الأعلى عبر
- * "file:.." في storefront/package.json. أي أن المتجر يستخدم الإطار كمكتبة، تماماً كما
- * سيستخدمه أي متجر آخر.
+ *   - التوصيل حسب المدينة (cityRateShipping) والاستلام من المحل (flatRateShipping بسعر 0).
+ *   - الدفع عند الاستلام (cashOnDelivery)، وبطاقة تجريبية في وضع التجربة فقط (demo-card-gateway: webhook موقّع، ومهلة دفع، واسترجاع).
+ *   - الكوبونات (coupons) من الإطار.
+ *   - صندوق بريد للتطوير (dev-mailbox): روابط استعادة كلمة المرور وإشعارات الطلبات.
+ *   - حد للطلبات وإنشاء السلال لكل IP (المتجر يعمل دون proxy في التطوير؛ خلف nginx فعّل TRUST_PROXY).
+ *
+ * optionsFromConfig تقرأ كل إعدادات الإطار من .env (المفحوصة عند الإقلاع)، وهنا نضيف ما يخص المتجر فقط.
  */
 
-// سعر التوصيل لكل مدينة. تاجوراء (حيث المحل) الأرخص. والقائمة المنسدلة في الموقع
-// تعرض المدن بهذا الترتيب نفسه (الإضافة تنشرها في GET /checkout/options).
-// المدينة غير المذكورة هنا لا يصلها التوصيل: إتمام الشراء إليها يُرفض بـ 400.
+/** أسعار التوصيل بالدرهم (1 دينار = 1000 درهم). تاجوراء الأرخص لأن المحل فيها. */
 const DELIVERY_RATES = {
   "تاجوراء": 5000,
   "طرابلس": 10000,
@@ -41,21 +46,18 @@ const DELIVERY_RATES = {
   "سبها": 50000,
 };
 
-/**
- * يبني تطبيق المتجر. ثلاثة ملفات تستخدمها: index.js (التشغيل)، و migrate.js (الجداول)،
- * و seed.js (البيانات الأولية). logLevel اختياري، وإلا يُقرأ من .env.
- */
 function buildApp(logLevel) {
-  // الإعدادات بعد التحقق منها: يفشل هنا إن نقص متغير أو كان سر ضعيفاً.
   const config = loadConfig();
+  const webOrigin = process.env.WEB_ORIGIN ?? `http://localhost:${process.env.WEB_PORT ?? 5173}`;
+  // سر الـ webhook التجريبي: من .env إن وُجد، وإلا مشتق من سر التوكنات (ثابت بين إعادات التشغيل).
+  const webhookSecret =
+    process.env.DEMO_GATEWAY_SECRET || createHash("sha256").update(`demo-gateway:${config.authTokenSecret}`).digest("hex");
+  const demoMode = (process.env.DEMO_MODE ?? (config.env === "production" ? "false" : "true")) === "true";
+
   const app = createCommerceApp({
-    databaseUrl: config.databaseUrl,
-    ownerApiKey: config.ownerApiKey,
-    authTokenSecret: config.authTokenSecret,
-    corsOrigin: config.corsOrigin,
-    trustProxy: config.trustProxy,
-    logger: new Logger(logLevel ?? config.logLevel),
-    // الإضافات الثلاث التي اختارها هذا المتجر. متجر آخر يختار غيرها، دون تعديل الإطار.
+    ...optionsFromConfig(config, new Logger(logLevel ?? config.logLevel, { format: config.logFormat })),
+    checkoutRateLimit: { maxFailures: 30, windowSeconds: 10 * 60 },
+    cartCreationRateLimit: { maxFailures: 200, windowSeconds: 60 * 60 },
     plugins: [
       cityRateShipping({ name: "توصيل للمنزل", rates: DELIVERY_RATES, freeOver: 500000 }), // مجاني فوق 500 دينار
       flatRateShipping({ id: "pickup", name: "استلام من المحل - تاجوراء", rate: 0 }),
@@ -63,6 +65,11 @@ function buildApp(logLevel) {
         name: "الدفع نقداً عند الاستلام",
         instructions: "ادفع نقداً للمندوب عند استلام طلبك، أو في المحل إن اخترت الاستلام من المحل.",
       }),
+      // البوابة التجريبية وصندوق البريد للتطوير فقط: في الإنتاج (DEMO_MODE=false) لا يوجد مسار
+      // /payments/card/simulate يسمح بتعليم طلب "مدفوعاً" بمعرفة رقمه وهاتفه.
+      ...(demoMode ? [demoCardGateway({ payPageUrl: `${webOrigin}/pay.html`, webhookSecret })] : []),
+      coupons(),
+      devMailbox({ webOrigin, enabled: demoMode }),
     ],
   });
   return { app, config };

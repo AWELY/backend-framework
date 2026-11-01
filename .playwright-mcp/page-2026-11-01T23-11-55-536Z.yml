@@ -1,0 +1,155 @@
+- generic:
+  - banner:
+    - link:
+      - /url: index.html
+      - generic: لوحة الإدارة
+    - generic:
+      - generic: مدير المتجر
+      - generic: مدير
+      - button: خروج
+  - main:
+    - generic:
+      - navigation:
+        - link:
+          - /url: "#/"
+          - text: البداية
+        - link:
+          - /url: "#/orders"
+          - text: الطلبات
+        - link:
+          - /url: "#/deliveries"
+          - text: التوصيل
+        - link:
+          - /url: "#/products"
+          - text: المنتجات
+        - link:
+          - /url: "#/categories"
+          - text: الأقسام
+        - link:
+          - /url: "#/coupons"
+          - text: الكوبونات
+        - link:
+          - /url: "#/customers"
+          - text: الزبائن
+        - link:
+          - /url: "#/staff"
+          - text: الموظفون
+        - link:
+          - /url: "#/audit"
+          - text: سجل التدقيق
+      - generic:
+        - heading [level=1]: سجل التدقيق
+        - generic:
+          - textbox:
+            - /placeholder: "العملية تبدأ بـ (مثل: PATCH /orders)"
+        - generic:
+          - table:
+            - rowgroup:
+              - row:
+                - columnheader: الوقت
+                - columnheader: الفاعل
+                - columnheader: العملية
+                - columnheader: النتيجة
+                - columnheader: IP
+                - columnheader: رقم الطلب
+  - dialog [ref=f13e96]:
+    - generic [ref=f13e97]:
+      - heading "تفاصيل الطلب" [level=2] [ref=f13e98]
+      - button "إغلاق" [active] [ref=f13e99] [cursor=pointer]: ×
+    - generic [ref=f13e100]:
+      - generic [ref=f13e185]:
+        - generic [ref=f13e186]: قيد المراجعة
+        - generic [ref=f13e187]: مسترجع جزئياً
+        - generic [ref=f13e188]: d3aca07c-dbb0-4ced-9d82-8080cda3df4e
+      - generic [ref=f13e189]:
+        - term [ref=f13e190]: الزبون
+        - definition [ref=f13e191]:
+          - text: أحمد الورفلي —
+          - link "0913334455" [ref=f13e192] [cursor=pointer]:
+            - /url: tel:0913334455
+        - term [ref=f13e193]: العنوان
+        - definition [ref=f13e194]: طرابلس — حي الأندلس، شارع جرابة، قرب الجامع
+        - term [ref=f13e195]: الشحن
+        - definition [ref=f13e196]: city-rate
+        - term [ref=f13e197]: الدفع
+        - definition [ref=f13e198]: card (DEMO-PAY-MVYFZZ55)
+        - term [ref=f13e199]: التاريخ
+        - definition [ref=f13e200]: 02‏/11‏/2026، 1:09 ص
+      - table [ref=f13e202]:
+        - rowgroup [ref=f13e203]:
+          - row [ref=f13e204]:
+            - columnheader "المنتج" [ref=f13e205]
+            - columnheader "SKU" [ref=f13e206]
+            - columnheader "السعر" [ref=f13e207]
+            - columnheader "الكمية" [ref=f13e208]
+            - columnheader "المجموع" [ref=f13e209]
+        - rowgroup [ref=f13e210]:
+          - row [ref=f13e211]:
+            - cell "ساعة ذكية رياضية (مقاس 46 ملم) أُعيد 1" [ref=f13e212]:
+              - text: ساعة ذكية رياضية (مقاس 46 ملم)
+              - generic [ref=f13e213]: أُعيد 1
+            - cell "WATCH-SPT-46" [ref=f13e214]
+            - cell "270 د.ل" [ref=f13e215]
+            - cell "1" [ref=f13e216]
+            - cell "270 د.ل" [ref=f13e217]
+          - row [ref=f13e218]:
+            - cell "المجموع" [ref=f13e219]
+            - cell "270 د.ل" [ref=f13e220]
+          - row [ref=f13e221]:
+            - cell "Coupon WELCOME10 (10%) COUPON:WELCOME10" [ref=f13e222]
+            - cell "−27 د.ل" [ref=f13e223]
+          - row [ref=f13e224]:
+            - cell "التوصيل" [ref=f13e225]
+            - cell "10 د.ل" [ref=f13e226]
+          - row [ref=f13e227]:
+            - cell "الإجمالي" [ref=f13e228]
+            - cell "253 د.ل" [ref=f13e229]
+          - row [ref=f13e230]:
+            - cell "المسترجع" [ref=f13e231]
+            - cell "100 د.ل" [ref=f13e232]
+      - generic [ref=f13e233]:
+        - heading "الإجراءات" [level=3] [ref=f13e234]
+        - textbox "ملاحظة على التغيير (اختياري، تظهر في السجل)" [ref=f13e236]
+        - generic [ref=f13e237]:
+          - 'button "تغيير إلى: تم التأكيد" [ref=f13e238] [cursor=pointer]'
+          - button "إلغاء الطلب" [ref=f13e239] [cursor=pointer]
+      - generic [ref=f13e240]:
+        - heading "التوصيل" [level=3] [ref=f13e241]
+        - paragraph [ref=f13e242]: لم يُسند لمندوب بعد.
+        - generic [ref=f13e243]:
+          - combobox [ref=f13e244]:
+            - option "سالم المندوب (0920000001)" [selected]
+            - option "علي المندوب (0920000002)"
+          - button "إسناد" [ref=f13e245] [cursor=pointer]
+      - generic [ref=f13e246]:
+        - heading "الاسترجاع" [level=3] [ref=f13e247]
+        - paragraph [ref=f13e248]:
+          - generic [ref=f13e249]: نجح
+          - text: 100 د.ل — 02‏/11‏/2026، 1:11 ص — إرجاع الساعة DEMO-RF-MVYG2JL3
+        - generic [ref=f13e250]:
+          - generic [ref=f13e251]:
+            - generic [ref=f13e252]:
+              - generic [ref=f13e253]: المبلغ (دينار، المتبقي 153)
+              - spinbutton [ref=f13e254]: "153"
+            - generic [ref=f13e255]:
+              - generic [ref=f13e256]: السبب
+              - 'textbox "مثال: إرجاع قطعة تالفة" [ref=f13e257]'
+          - paragraph [ref=f13e258]: "إعادة كميات إلى المخزون (اختياري):"
+          - button "تنفيذ الاسترجاع" [ref=f13e259] [cursor=pointer]
+      - generic [ref=f13e260]:
+        - heading "سجل الطلب" [level=3] [ref=f13e261]
+        - list [ref=f13e262]:
+          - listitem [ref=f13e263]:
+            - generic [ref=f13e264]: 02‏/11‏/2026، 1:09 ص — guest
+            - generic [ref=f13e265]: تم استلام الطلب
+          - listitem [ref=f13e266]:
+            - generic [ref=f13e267]: 02‏/11‏/2026، 1:09 ص — system
+            - generic [ref=f13e268]: "الدفع: بانتظار الدفع"
+          - listitem [ref=f13e269]:
+            - generic [ref=f13e270]: 02‏/11‏/2026، 1:09 ص — system
+            - generic [ref=f13e271]: "الدفع: مدفوع"
+          - listitem [ref=f13e272]:
+            - generic [ref=f13e273]: 02‏/11‏/2026، 1:11 ص — staff
+            - generic [ref=f13e274]: استرجاع مبلغ — مسترجع جزئياً
+            - generic [ref=f13e275]: إرجاع الساعة
+  - status: تم الاسترجاع

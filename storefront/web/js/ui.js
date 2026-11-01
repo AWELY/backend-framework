@@ -65,14 +65,31 @@ export const ORDER_STATUS = {
   cancelled: "ملغي",
 };
 
-// ترجمة حالات الدفع. في هذا المتجر "pending" تعني الدفع عند الاستلام.
 export const PAYMENT_STATUS = {
   unpaid: "غير مدفوع",
-  pending: "الدفع عند الاستلام",
+  pending: "بانتظار الدفع",
   paid: "مدفوع",
   failed: "فشل الدفع",
+  partially_refunded: "مسترجع جزئياً",
   refunded: "مسترجع",
 };
+
+export const DELIVERY_STATUS = {
+  assigned: "أُسند لمندوب",
+  picked_up: "مع المندوب",
+  delivered: "تم التسليم",
+  failed: "محاولة لم تنجح",
+};
+
+/** وصف سطر في سجل الطلب الزمني (GET /orders/:id/events). */
+export function timelineText(e) {
+  if (e.type === "created") return "تم استلام الطلب";
+  if (e.type === "status") return `حالة الطلب: ${ORDER_STATUS[e.to] ?? e.to}${e.note === "payment_expired" ? " (انتهت مهلة الدفع)" : ""}`;
+  if (e.type === "payment") return `الدفع: ${PAYMENT_STATUS[e.to] ?? e.to}`;
+  if (e.type === "refund") return `استرجاع مبلغ — ${PAYMENT_STATUS[e.to] ?? e.to}`;
+  if (e.type === "delivery") return `التوصيل: ${DELIVERY_STATUS[e.to] ?? e.to}`;
+  return e.type;
+}
 
 /** يعرض تاريخاً من الـ API (صيغة ISO) بالتنسيق الليبي العربي، مع الوقت. */
 export function formatDate(iso) {
@@ -82,10 +99,13 @@ export function formatDate(iso) {
 /** يقرأ قيمة من استعلام رابط الصفحة. مثال: في product.html?id=abc تعطي qs("id") القيمة "abc". */
 export const qs = (name) => new URLSearchParams(location.search).get(name);
 
-// أسماء حقول الـ API بالعربية، لرسائل أخطاء التحقق (400).
+/** أسماء الحقول بالعربية، لرسائل التحقق القادمة من الإطار. */
 const FIELD_LABELS = {
   email: "البريد الإلكتروني",
   password: "كلمة المرور",
+  currentPassword: "كلمة المرور الحالية",
+  newPassword: "كلمة المرور الجديدة",
+  token: "رمز الاستعادة",
   name: "الاسم",
   phone: "رقم الهاتف",
   contactName: "الاسم",
@@ -94,51 +114,108 @@ const FIELD_LABELS = {
   shippingCity: "المدينة",
   shippingMethod: "طريقة الاستلام",
   paymentMethod: "طريقة الدفع",
+  couponCode: "الكوبون",
+  variantId: "النوع",
   quantity: "الكمية",
+  cashCollected: "المبلغ المحصّل",
+  courierId: "المندوب",
+  note: "الملاحظة",
+  amount: "المبلغ",
+  price: "السعر",
+  slug: "الرابط",
+  sku: "رمز SKU",
+  title: "الاسم",
+  code: "الرمز",
+  value: "القيمة",
+  role: "الدور",
 };
 
 /** يترجم رسالة مشكلة حقل من مدقّق الإطار (engine/validation.ts) إلى العربية. */
 function fieldMessage(message) {
   if (message === "is required") return "مطلوب";
   if (message === "has an invalid format") return "صيغته غير صحيحة";
+  if (message === "is incorrect") return "غير صحيحة";
+  if (message === "already exists") return "مستخدم من قبل";
   if (message.startsWith("must be at least")) return `قصير جداً (${message.match(/\d+/)?.[0] ?? ""} أحرف على الأقل)`;
   if (message.startsWith("must be one of")) return "اختر قيمة من القائمة";
+  if (message.startsWith("must equal the order total")) return `يجب أن يساوي إجمالي الطلب (${money(Number(message.match(/\d+/)?.[0] ?? 0))})`;
+  if (message === "must be an active courier") return "اختر مندوباً نشطاً";
+  if (message === "is required for this product") return "اختر النوع أولاً";
   return "قيمة غير صحيحة";
 }
 
+/** رسائل الكوبون من إضافة الكوبونات، بالعربية. */
+function couponMessage(message) {
+  if (/does not exist/.test(message)) return "هذا الكوبون غير موجود.";
+  if (/expired/.test(message)) return "انتهت صلاحية هذا الكوبون.";
+  if (/used up/.test(message)) return "استُخدم هذا الكوبون بالكامل.";
+  if (/subtotal of at least (\d+)/.test(message)) return `هذا الكوبون يتطلب مشتريات بقيمة ${money(Number(message.match(/(\d+)/)?.[1] ?? 0))} على الأقل.`;
+  if (/does not accept coupons/.test(message)) return "المتجر لا يقبل كوبونات حالياً.";
+  return "الكوبون غير صالح.";
+}
+
 /**
- * يحوّل خطأ من الـ API إلى رسالة عربية واضحة للمشتري.
- * الـ API يرد بالإنجليزية (لغة المطورين)، والموقع هو من يقرر ما يقوله للمستخدم.
- * يعتمد على رمز الحالة، وعلى نص الرسالة الثابت من الإطار، وعلى details إن وُجدت.
+ * يحوّل أي خطأ إلى رسالة عربية مفهومة. القرار بالرمز الثابت (err.code)، لا بنص الرسالة.
+ * الأخطاء غير المتوقعة تُظهر رقم المرجع (requestId)، فيذكره الزبون لخدمة العملاء.
  */
 export function errorText(err) {
   if (!err || err.status === undefined) return "حدث خطأ غير متوقع، حاول مرة أخرى.";
-  // 0: لا رد أصلاً (انظر ApiError في api.js).
-  if (err.status === 0) return "تعذّر الاتصال بخادم المتجر. تأكد من الاتصال وأعد المحاولة.";
-  // 429: حد المحاولات، ونحوّل الثواني إلى دقائق مقرّبة للأعلى.
-  if (err.status === 429) {
-    const minutes = Math.max(1, Math.ceil((err.details?.retryAfterSeconds ?? 60) / 60));
-    return `محاولات كثيرة. حاول مرة أخرى بعد ${minutes} دقيقة.`;
+  const ref = err.requestId ? ` (رقم المرجع: ${String(err.requestId).slice(0, 8)})` : "";
+  switch (err.code) {
+    case "NETWORK":
+      return "تعذّر الاتصال بخادم المتجر. تأكد من الاتصال وأعد المحاولة.";
+    case "RATE_LIMITED": {
+      const minutes = Math.max(1, Math.ceil((err.details?.retryAfterSeconds ?? 60) / 60));
+      return `محاولات كثيرة. حاول مرة أخرى بعد ${minutes} دقيقة.`;
+    }
+    case "INSUFFICIENT_STOCK": {
+      const available = err.details?.available;
+      return available !== undefined ? `الكمية غير متوفرة. المتوفر حالياً: ${available}` : "الكمية المطلوبة غير متوفرة حالياً.";
+    }
+    case "INVALID_CREDENTIALS":
+      return Array.isArray(err.details) ? "كلمة المرور الحالية غير صحيحة." : "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
+    case "DUPLICATE_VALUE":
+      return Array.isArray(err.details) ? err.details.map((d) => `${FIELD_LABELS[d.field] ?? d.field}: مستخدم من قبل`).join(" — ") : "هذه القيمة مستخدمة من قبل (البريد أو الرابط أو الرمز).";
+    case "CART_CHECKED_OUT":
+      return "تم إرسال هذه السلة مسبقاً.";
+    case "PRODUCT_UNAVAILABLE":
+      return "بعض المنتجات في سلتك لم تعد متوفرة. احذفها وأعد المحاولة.";
+    case "CART_EMPTY":
+      return "سلتك فارغة.";
+    case "VARIANT_REQUIRED":
+      return "اختر النوع (اللون أو المقاس) أولاً.";
+    case "INVALID_COUPON":
+      return couponMessage(err.message);
+    case "INVALID_RESET_TOKEN":
+      return "رابط استعادة كلمة المرور غير صالح أو انتهت صلاحيته. اطلب رابطاً جديداً.";
+    case "IDEMPOTENCY_IN_PROGRESS":
+      return "طلبك قيد المعالجة، انتظر لحظة.";
+    case "PRECONDITION_FAILED":
+      return "عدّل شخص آخر هذا العنصر قبلك. أعد التحميل ثم أعد التعديل.";
+    case "INVALID_STATUS_TRANSITION":
+    case "INVALID_PAYMENT_TRANSITION":
+      return "لا يمكن هذا التغيير في الحالة الحالية.";
+    case "ORDER_NOT_REFUNDABLE":
+      return "لا يمكن استرجاع مبلغ لطلب غير مدفوع.";
+    case "REFUND_EXCEEDS_PAID":
+      return `المبلغ أكبر من المتبقي للاسترجاع (${money(err.details?.refundable ?? 0)}).`;
+    case "PAYMENT_PROVIDER_ERROR":
+      return "رفضت بوابة الدفع العملية. حاول لاحقاً.";
+    case "INVALID_TOKEN":
+      return "انتهت جلستك. سجّل الدخول من جديد.";
+    case "FORBIDDEN":
+      return "لا تملك صلاحية هذه العملية.";
+    case "PAYLOAD_TOO_LARGE":
+      return "البيانات المرسلة كبيرة جداً.";
   }
-  // 409 مخزون غير كافٍ: الإطار يرسل الكمية المتوفرة في details.
-  if (err.message === "Insufficient stock") {
-    const available = err.details?.available;
-    return available !== undefined ? `الكمية غير متوفرة. المتوفر حالياً: ${available}` : "الكمية المطلوبة غير متوفرة حالياً.";
-  }
-  if (err.message === "Invalid email or password") return "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
-  if (err.message === "A record with the same unique value already exists") return "هذا البريد الإلكتروني مسجّل مسبقاً.";
-  if (err.message === "This cart has already been checked out") return "تم إرسال هذه السلة مسبقاً.";
-  if (err.message === "Some products in the cart are no longer available") return "بعض المنتجات في سلتك لم تعد متوفرة. احذفها وأعد المحاولة.";
-  if (err.message === "The cart is empty") return "سلتك فارغة.";
-  // 400 من مدقّق المدخلات: كل الحقول الخاطئة في سطر واحد، مثل "رقم الهاتف: صيغته غير صحيحة".
   if (err.status === 400 && Array.isArray(err.details) && err.details.length) {
-    return err.details.map((d) => `${FIELD_LABELS[d.field] ?? d.field}: ${fieldMessage(d.message)}`).join(" — ");
+    return err.details.map((d) => `${FIELD_LABELS[d.field.replace(/^query\./, "")] ?? d.field}: ${fieldMessage(d.message)}`).join(" — ");
   }
   if (err.status === 404) return "العنصر المطلوب غير موجود.";
-  return "حدث خطأ غير متوقع، حاول مرة أخرى.";
+  if (err.status === 401) return "سجّل الدخول للمتابعة.";
+  return `حدث خطأ غير متوقع، حاول مرة أخرى.${ref}`;
 }
 
-// مؤقت الإشعار الحالي، لنلغيه إن ظهر إشعار جديد قبل أن يختفي القديم.
 let toastTimer;
 /**
  * إشعار صغير يظهر أسفل الشاشة 3 ثوانٍ ثم يختفي (مثل "تمت الإضافة إلى السلة").
@@ -188,13 +265,21 @@ export function getCategories() {
 
 /**
  * بطاقة منتج واحد، بنفس الشكل في الصفحة الرئيسية ونتائج البحث و"منتجات مشابهة".
- * quantity: الكمية في المخزون، لشارة "نفد" أو "باقي قليل" وتعطيل زر الإضافة.
+ * stock: رقم الكمية، أو مستوى المخزون كاملاً من GET /inventory/:id ({ quantity, variants }).
+ * المنتج ذو الأشكال (ألوان أو مقاسات) لا يُضاف من البطاقة: الزر يفتح صفحته لاختيار النوع.
  * encodeURIComponent تحمي الرابط، و esc تحمي كل نص يوضع في HTML.
  * loading="lazy": الصورة لا تُحمَّل إلا عند الاقتراب منها أثناء التمرير، فتفتح الصفحة أسرع.
  */
-export function productCard(p, quantity, categoryName) {
+export function productCard(p, stock, categoryName) {
   const url = `product.html?id=${encodeURIComponent(p.id)}`;
+  const variants = typeof stock === "object" && stock?.variants?.length ? stock.variants : null;
+  const quantity = variants ? variants.reduce((sum, v) => sum + v.quantity, 0) : typeof stock === "object" ? (stock?.quantity ?? 0) : stock;
   const soldOut = quantity <= 0;
+  const action = variants && !soldOut
+    ? `<a class="add-btn" href="${url}">${icon("grid", 18)}<span>اختر النوع (${variants.length})</span></a>`
+    : `<button class="add-btn" data-add="${esc(p.id)}" ${soldOut ? "disabled" : ""}>
+          ${soldOut ? "نفدت الكمية" : `${icon("cartPlus", 18)}<span>أضف إلى السلة</span>`}
+        </button>`;
   return `
     <article class="card${soldOut ? " sold-out" : ""}">
       <a class="thumb" href="${url}" tabindex="-1">
@@ -205,9 +290,7 @@ export function productCard(p, quantity, categoryName) {
         ${categoryName ? `<span class="card-cat">${esc(categoryName)}</span>` : ""}
         <a class="name" href="${url}">${esc(p.name)}</a>
         <div class="price">${priceHtml(p.price)}</div>
-        <button class="add-btn" data-add="${esc(p.id)}" ${soldOut ? "disabled" : ""}>
-          ${soldOut ? "نفدت الكمية" : `${icon("cartPlus", 18)}<span>أضف إلى السلة</span>`}
-        </button>
+        ${action}
       </div>
     </article>`;
 }
@@ -302,6 +385,8 @@ export function mountLayout(active) {
         <li><a href="track.html">تتبّع طلبك</a></li>
         <li><a href="${accountHref}">${customer ? "طلباتي" : "حسابي"}</a></li>
         <li><a href="cart.html">سلة التسوق</a></li>
+        <li><a href="courier.html">تطبيق المندوب</a></li>
+        <li><a href="admin.html">لوحة الإدارة</a></li>
       </ul></div>
       <div><h4>تواصل معنا</h4><ul class="contact">
         <li>${icon("pin", 16)} ${esc(STORE.address)}</li>

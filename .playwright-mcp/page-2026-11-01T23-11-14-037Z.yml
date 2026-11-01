@@ -1,0 +1,20 @@
+- generic [active] [ref=f10e1]:
+  - banner [ref=f10e2]:
+    - link "متجر ماء تطبيق المندوب" [ref=f10e3] [cursor=pointer]:
+      - /url: index.html
+      - img "متجر ماء" [ref=f10e4]
+      - generic [ref=f10e5]: تطبيق المندوب
+    - generic [ref=f10e6]:
+      - generic [ref=f10e7]: سالم المندوب
+      - generic [ref=f10e8]: مندوب
+      - button "خروج" [ref=f10e9] [cursor=pointer]
+  - main [ref=f10e10]:
+    - heading "توصيلاتي" [level=1] [ref=f10e60]
+    - generic [ref=f10e61]:
+      - button "الحالية" [ref=f10e62] [cursor=pointer]
+      - button "المسلّمة" [ref=f10e63] [cursor=pointer]
+    - generic [ref=f10e64]:
+      - generic [ref=f10e65]: لا توجد توصيلات الآن
+      - paragraph [ref=f10e66]: تُحدَّث القائمة تلقائياً.
+    - button "تحديث" [ref=f10e67] [cursor=pointer]
+  - status: تم التسليم. شكراً!

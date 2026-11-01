@@ -1,0 +1,181 @@
+- generic [ref=f3e1]:
+  - generic [ref=f3e3]:
+    - generic [ref=f3e4]:
+      - generic [ref=f3e5]: توصيل لكل المدن الليبية
+      - generic [ref=f3e11]: الدفع نقداً عند الاستلام
+    - generic [ref=f3e16]:
+      - generic [ref=f3e17]: طرابلس - تاجوراء
+      - generic [ref=f3e21]: يومياً 10 ص - 10 م
+  - banner [ref=f3e25]:
+    - generic [ref=f3e26]:
+      - link "متجر ماء" [ref=f3e27] [cursor=pointer]:
+        - /url: index.html
+        - img "متجر ماء" [ref=f3e28]
+      - search [ref=f3e29]:
+        - searchbox "بحث" [ref=f3e30]
+        - button "بحث" [ref=f3e31] [cursor=pointer]
+      - navigation [ref=f3e35]:
+        - link "تتبّع طلبك" [ref=f3e36] [cursor=pointer]:
+          - /url: track.html
+        - link "حسابي" [ref=f3e41] [cursor=pointer]:
+          - /url: account.html
+        - link "السلة 1" [ref=f3e46] [cursor=pointer]:
+          - /url: cart.html
+          - generic [ref=f3e51]: السلة
+          - generic [ref=f3e52]: "1"
+  - navigation "الأقسام" [ref=f3e53]:
+    - generic [ref=f3e54]:
+      - link "كل المنتجات" [ref=f3e55] [cursor=pointer]:
+        - /url: index.html#products
+      - link "باور بانك" [ref=f3e61] [cursor=pointer]:
+        - /url: index.html?category=1fd11b9e-a550-4de8-8d88-edba25051ac3#products
+      - link "جرابات وحماية" [ref=f3e62] [cursor=pointer]:
+        - /url: index.html?category=b2c68d7f-43aa-4740-a2b4-61208b8a28ca#products
+      - link "ساعات ذكية" [ref=f3e63] [cursor=pointer]:
+        - /url: index.html?category=a4938db4-75ba-4103-935b-22c3a289b203#products
+      - link "سماعات" [ref=f3e64] [cursor=pointer]:
+        - /url: index.html?category=4fece7f6-f874-4c1b-9c68-8916345a5970#products
+      - link "شواحن وكوابل" [ref=f3e65] [cursor=pointer]:
+        - /url: index.html?category=7536eddf-6326-4686-a1e5-6dcf1aedad30#products
+      - link "مكبرات صوت" [ref=f3e66] [cursor=pointer]:
+        - /url: index.html?category=5b22716f-54e0-4ba0-829e-6198fd028395#products
+  - main [ref=f3e67]:
+    - heading "إتمام الطلب" [level=1] [ref=f3e68]
+    - generic [ref=f3e69]:
+      - generic [ref=f3e70]:
+        - generic [ref=f3e71]:
+          - text: تشتري كضيف.
+          - link "سجّل الدخول" [ref=f3e72] [cursor=pointer]:
+            - /url: account.html?next=checkout.html
+          - text: لتتابع طلباتك من حسابك (اختياري).
+        - heading "بيانات المستلم" [level=3] [ref=f3e73]
+        - generic [ref=f3e74]:
+          - generic [ref=f3e75]: الاسم الكامل
+          - textbox "الاسم الكامل" [ref=f3e76]: أحمد الورفلي
+        - generic [ref=f3e77]:
+          - generic [ref=f3e78]: رقم الهاتف
+          - textbox "رقم الهاتف" [ref=f3e79]:
+            - /placeholder: 09XXXXXXXX
+            - text: "0913334455"
+        - heading "طريقة الاستلام" [level=3] [ref=f3e80]
+        - generic [ref=f3e81]:
+          - generic [ref=f3e82] [cursor=pointer]:
+            - radio "توصيل للمنزل السعر حسب المدينة" [checked] [ref=f3e83]
+            - generic [ref=f3e84]: توصيل للمنزلالسعر حسب المدينة
+          - generic [ref=f3e85] [cursor=pointer]:
+            - radio "استلام من المحل - تاجوراء" [ref=f3e86]
+            - generic [ref=f3e87]: استلام من المحل - تاجوراء
+        - generic [ref=f3e88]:
+          - generic [ref=f3e89]:
+            - generic [ref=f3e90]: المدينة
+            - combobox "المدينة" [ref=f3e91]:
+              - option "اختر المدينة"
+              - option "تاجوراء"
+              - option "طرابلس" [selected]
+              - option "جنزور"
+              - option "القره بوللي"
+              - option "الزاوية"
+              - option "صبراتة"
+              - option "غريان"
+              - option "الخمس"
+              - option "زليتن"
+              - option "مصراتة"
+              - option "سرت"
+              - option "بنغازي"
+              - option "البيضاء"
+              - option "درنة"
+              - option "طبرق"
+              - option "سبها"
+          - generic [ref=f3e92]:
+            - generic [ref=f3e93]: العنوان بالتفصيل
+            - textbox "العنوان بالتفصيل" [ref=f3e94]:
+              - /placeholder: المنطقة، الشارع، أقرب معلم
+              - text: حي الأندلس، شارع جرابة، قرب الجامع
+        - heading "كوبون الخصم" [level=3] [ref=f3e95]
+        - generic [ref=f3e96]:
+          - textbox "كوبون الخصم" [ref=f3e97]:
+            - /placeholder: "مثال: WELCOME10"
+            - text: welcome10
+          - button "تطبيق" [ref=f3e98] [cursor=pointer]
+          - generic [ref=f3e182]: تم تطبيق الكوبون
+        - heading "طريقة الدفع" [level=3] [ref=f3e99]
+        - generic [ref=f3e100]:
+          - generic [ref=f3e101] [cursor=pointer]:
+            - radio "الدفع نقداً عند الاستلام" [ref=f3e102]
+            - generic [ref=f3e103]: الدفع نقداً عند الاستلام
+          - generic [ref=f3e104] [cursor=pointer]:
+            - radio "بطاقة مصرفية (تجريبي)" [checked] [active] [ref=f3e105]
+            - generic [ref=f3e106]: بطاقة مصرفية (تجريبي)
+        - button "تأكيد الطلب" [ref=f3e107] [cursor=pointer]
+      - complementary [ref=f3e108]:
+        - heading "طلبك" [level=3] [ref=f3e109]
+        - generic [ref=f3e110]:
+          - generic [ref=f3e111]: ساعة ذكية رياضية (مقاس 46 ملم) × 1
+          - generic [ref=f3e112]: 270 د.ل
+        - generic [ref=f3e113]:
+          - generic [ref=f3e114]: المجموع
+          - generic [ref=f3e115]: 270 د.ل
+        - generic [ref=f3e184]:
+          - generic [ref=f3e185]: خصم WELCOME10
+          - generic [ref=f3e186]: −27 د.ل
+        - generic [ref=f3e116]:
+          - generic [ref=f3e117]: التوصيل
+          - generic [ref=f3e118]: 10 د.ل
+        - generic [ref=f3e119]:
+          - generic [ref=f3e120]: الإجمالي
+          - generic [ref=f3e121]: 253 د.ل
+  - contentinfo [ref=f3e122]:
+    - generic [ref=f3e123]:
+      - generic [ref=f3e124]:
+        - img "متجر ماء" [ref=f3e125]
+        - paragraph [ref=f3e126]: إلكترونيات وإكسسوارات الهواتف في طرابلس - تاجوراء. منتجات مختارة بأسعار مناسبة، وتوصيل لكل ليبيا.
+        - generic [ref=f3e127]:
+          - generic [ref=f3e128]: الدفع عند الاستلام
+          - generic [ref=f3e133]: توصيل لكل المدن
+      - generic [ref=f3e139]:
+        - heading "الأقسام" [level=4] [ref=f3e140]
+        - list [ref=f3e141]:
+          - listitem [ref=f3e142]:
+            - link "باور بانك" [ref=f3e143] [cursor=pointer]:
+              - /url: index.html?category=1fd11b9e-a550-4de8-8d88-edba25051ac3#products
+          - listitem [ref=f3e144]:
+            - link "جرابات وحماية" [ref=f3e145] [cursor=pointer]:
+              - /url: index.html?category=b2c68d7f-43aa-4740-a2b4-61208b8a28ca#products
+          - listitem [ref=f3e146]:
+            - link "ساعات ذكية" [ref=f3e147] [cursor=pointer]:
+              - /url: index.html?category=a4938db4-75ba-4103-935b-22c3a289b203#products
+          - listitem [ref=f3e148]:
+            - link "سماعات" [ref=f3e149] [cursor=pointer]:
+              - /url: index.html?category=4fece7f6-f874-4c1b-9c68-8916345a5970#products
+          - listitem [ref=f3e150]:
+            - link "شواحن وكوابل" [ref=f3e151] [cursor=pointer]:
+              - /url: index.html?category=7536eddf-6326-4686-a1e5-6dcf1aedad30#products
+          - listitem [ref=f3e152]:
+            - link "مكبرات صوت" [ref=f3e153] [cursor=pointer]:
+              - /url: index.html?category=5b22716f-54e0-4ba0-829e-6198fd028395#products
+      - generic [ref=f3e154]:
+        - heading "خدمة العملاء" [level=4] [ref=f3e155]
+        - list [ref=f3e156]:
+          - listitem [ref=f3e157]:
+            - link "تتبّع طلبك" [ref=f3e158] [cursor=pointer]:
+              - /url: track.html
+          - listitem [ref=f3e159]:
+            - link "حسابي" [ref=f3e160] [cursor=pointer]:
+              - /url: account.html
+          - listitem [ref=f3e161]:
+            - link "سلة التسوق" [ref=f3e162] [cursor=pointer]:
+              - /url: cart.html
+          - listitem [ref=f3e163]:
+            - link "تطبيق المندوب" [ref=f3e164] [cursor=pointer]:
+              - /url: courier.html
+          - listitem [ref=f3e165]:
+            - link "لوحة الإدارة" [ref=f3e166] [cursor=pointer]:
+              - /url: admin.html
+      - generic [ref=f3e167]:
+        - heading "تواصل معنا" [level=4] [ref=f3e168]
+        - list [ref=f3e169]:
+          - listitem [ref=f3e170]: طرابلس - تاجوراء
+          - listitem [ref=f3e174]: يومياً من 10 صباحاً حتى 10 مساءً
+    - generic [ref=f3e179]:
+      - generic [ref=f3e180]: © 2026 متجر ماء — جميع الحقوق محفوظة
+      - generic [ref=f3e181]: صور المنتجات للعرض التوضيحي

@@ -1,0 +1,146 @@
+- generic [active] [ref=f22e1]:
+  - banner [ref=f22e2]:
+    - link "متجر ماء لوحة الإدارة" [ref=f22e3] [cursor=pointer]:
+      - /url: index.html
+      - img "متجر ماء" [ref=f22e4]
+      - generic [ref=f22e5]: لوحة الإدارة
+    - generic [ref=f22e6]:
+      - generic [ref=f22e7]: مدير المتجر
+      - generic [ref=f22e8]: مدير
+      - button "خروج" [ref=f22e9] [cursor=pointer]
+  - main [ref=f22e10]:
+    - generic [ref=f22e11]:
+      - navigation [ref=f22e12]:
+        - link "البداية" [ref=f22e13] [cursor=pointer]:
+          - /url: "#/"
+        - link "الطلبات" [ref=f22e19] [cursor=pointer]:
+          - /url: "#/orders"
+        - link "التوصيل" [ref=f22e23] [cursor=pointer]:
+          - /url: "#/deliveries"
+        - link "المنتجات" [ref=f22e29] [cursor=pointer]:
+          - /url: "#/products"
+        - link "الأقسام" [ref=f22e34] [cursor=pointer]:
+          - /url: "#/categories"
+        - link "الكوبونات" [ref=f22e40] [cursor=pointer]:
+          - /url: "#/coupons"
+        - link "الزبائن" [ref=f22e45] [cursor=pointer]:
+          - /url: "#/customers"
+        - link "الموظفون" [ref=f22e49] [cursor=pointer]:
+          - /url: "#/staff"
+        - link "سجل التدقيق" [ref=f22e53] [cursor=pointer]:
+          - /url: "#/audit"
+      - generic [ref=f22e57]:
+        - heading "المنتجات" [level=1] [ref=f22e58]
+        - generic [ref=f22e59]:
+          - searchbox "بحث بالاسم" [ref=f22e60]
+          - generic [ref=f22e61]: 16 منتج
+          - button "منتج جديد" [ref=f22e62] [cursor=pointer]
+        - table [ref=f22e64]:
+          - rowgroup [ref=f22e65]:
+            - row [ref=f22e66]:
+              - columnheader [ref=f22e67]
+              - columnheader "المنتج" [ref=f22e68]
+              - columnheader "السعر" [ref=f22e69]
+              - columnheader "المخزون" [ref=f22e70]
+              - columnheader "الحالة" [ref=f22e71]
+          - rowgroup [ref=f22e72]:
+            - row [ref=f22e73] [cursor=pointer]:
+              - cell [ref=f22e74]
+              - cell "مكبر صوت مقاوم للماء waterproof-speaker" [ref=f22e75]: مكبر صوت مقاوم للماءwaterproof-speaker
+              - cell "210 د.ل" [ref=f22e76]
+              - cell "4" [ref=f22e77]
+              - cell "ظاهر" [ref=f22e79]
+            - row [ref=f22e81] [cursor=pointer]:
+              - cell [ref=f22e82]
+              - cell "مكبر صوت بلوتوث محمول bluetooth-speaker" [ref=f22e83]: مكبر صوت بلوتوث محمولbluetooth-speaker
+              - cell "150 د.ل" [ref=f22e84]
+              - cell "7" [ref=f22e85]
+              - cell "ظاهر" [ref=f22e87]
+            - row [ref=f22e89] [cursor=pointer]:
+              - cell [ref=f22e90]
+              - cell "واقي شاشة زجاج 9H glass-screen-protector" [ref=f22e91]: واقي شاشة زجاج 9Hglass-screen-protector
+              - cell "15 د.ل" [ref=f22e92]
+              - cell "100" [ref=f22e93]
+              - cell "ظاهر" [ref=f22e95]
+            - row [ref=f22e97] [cursor=pointer]:
+              - cell [ref=f22e98]
+              - cell "جراب سيليكون مقاوم للصدمات silicone-case 3 أشكال" [ref=f22e99]:
+                - text: جراب سيليكون مقاوم للصدماتsilicone-case
+                - generic [ref=f22e100]: 3 أشكال
+              - cell "25 د.ل" [ref=f22e101]
+              - cell "45" [ref=f22e102]
+              - cell "ظاهر" [ref=f22e104]
+            - row [ref=f22e106] [cursor=pointer]:
+              - cell [ref=f22e107]
+              - cell "باور بانك 20000 مللي أمبير شحن سريع power-bank-20000" [ref=f22e108]: باور بانك 20000 مللي أمبير شحن سريعpower-bank-20000
+              - cell "110 د.ل" [ref=f22e109]
+              - cell "8" [ref=f22e110]
+              - cell "ظاهر" [ref=f22e112]
+            - row [ref=f22e114] [cursor=pointer]:
+              - cell [ref=f22e115]
+              - cell "باور بانك 10000 مللي أمبير power-bank-10000" [ref=f22e116]: باور بانك 10000 مللي أمبيرpower-bank-10000
+              - cell "65 د.ل" [ref=f22e117]
+              - cell "25" [ref=f22e118]
+              - cell "ظاهر" [ref=f22e120]
+            - row [ref=f22e122] [cursor=pointer]:
+              - cell [ref=f22e123]
+              - cell "سوار لياقة ذكي fitness-band" [ref=f22e124]: سوار لياقة ذكيfitness-band
+              - cell "95 د.ل" [ref=f22e125]
+              - cell "2" [ref=f22e126]
+              - cell "ظاهر" [ref=f22e128]
+            - row [ref=f22e130] [cursor=pointer]:
+              - cell [ref=f22e131]
+              - cell "ساعة ذكية رياضية sport-smartwatch 2 أشكال" [ref=f22e132]:
+                - text: ساعة ذكية رياضيةsport-smartwatch
+                - generic [ref=f22e133]: 2 أشكال
+              - cell "250 د.ل" [ref=f22e134]
+              - cell "8" [ref=f22e135]
+              - cell "ظاهر" [ref=f22e137]
+            - row [ref=f22e139] [cursor=pointer]:
+              - cell [ref=f22e140]
+              - cell "سماعات سلكية 3.5 ملم wired-earphones" [ref=f22e141]: سماعات سلكية 3.5 ملمwired-earphones
+              - cell "20 د.ل" [ref=f22e142]
+              - cell "0" [ref=f22e143]
+              - cell "ظاهر" [ref=f22e145]
+            - row [ref=f22e147] [cursor=pointer]:
+              - cell [ref=f22e148]
+              - cell "سماعة رأس بعزل الضوضاء anc-headphones" [ref=f22e149]: سماعة رأس بعزل الضوضاءanc-headphones
+              - cell "280 د.ل" [ref=f22e150]
+              - cell "5" [ref=f22e151]
+              - cell "ظاهر" [ref=f22e153]
+            - row [ref=f22e155] [cursor=pointer]:
+              - cell [ref=f22e156]
+              - cell "سماعات لاسلكية بلوتوث مع علبة شحن wireless-earbuds" [ref=f22e157]: سماعات لاسلكية بلوتوث مع علبة شحنwireless-earbuds
+              - cell "120 د.ل" [ref=f22e158]
+              - cell "15" [ref=f22e159]
+              - cell "ظاهر" [ref=f22e161]
+            - row [ref=f22e163] [cursor=pointer]:
+              - cell [ref=f22e164]
+              - cell "شاحن سيارة مزدوج car-charger-dual" [ref=f22e165]: شاحن سيارة مزدوجcar-charger-dual
+              - cell "28 د.ل" [ref=f22e166]
+              - cell "20" [ref=f22e167]
+              - cell "ظاهر" [ref=f22e169]
+            - row [ref=f22e171] [cursor=pointer]:
+              - cell [ref=f22e172]
+              - cell "كابل لايتنينغ للآيفون cable-lightning" [ref=f22e173]: كابل لايتنينغ للآيفونcable-lightning
+              - cell "18 د.ل" [ref=f22e174]
+              - cell "2" [ref=f22e175]
+              - cell "ظاهر" [ref=f22e177]
+            - row [ref=f22e179] [cursor=pointer]:
+              - cell [ref=f22e180]
+              - cell "كابل USB-C إلى USB-C طول متر cable-usbc-1m" [ref=f22e181]: كابل USB-C إلى USB-C طول مترcable-usbc-1m
+              - cell "15 د.ل" [ref=f22e182]
+              - cell "80" [ref=f22e183]
+              - cell "ظاهر" [ref=f22e185]
+            - row [ref=f22e187] [cursor=pointer]:
+              - cell [ref=f22e188]
+              - cell "شاحن GaN بقوة 65 واط بثلاث منافذ charger-65w-gan" [ref=f22e189]: شاحن GaN بقوة 65 واط بثلاث منافذcharger-65w-gan
+              - cell "95 د.ل" [ref=f22e190]
+              - cell "12" [ref=f22e191]
+              - cell "ظاهر" [ref=f22e193]
+            - row [ref=f22e195] [cursor=pointer]:
+              - cell [ref=f22e196]
+              - cell "شاحن سريع 20 واط USB-C fast-charger-20w" [ref=f22e197]: شاحن سريع 20 واط USB-Cfast-charger-20w
+              - cell "35 د.ل" [ref=f22e198]
+              - cell "40" [ref=f22e199]
+              - cell "ظاهر" [ref=f22e201]

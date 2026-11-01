@@ -11,7 +11,7 @@
     "migrate": "node migrate.js"
   },
   "dependencies": {
-    "commerce-framework": "file:__FRAMEWORK_PATH__",
+    "maa": "file:__FRAMEWORK_PATH__",
     "dotenv": "^18.0.3"
   }
 }

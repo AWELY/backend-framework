@@ -1,0 +1,31 @@
+- generic [active] [ref=f10e1]:
+  - banner [ref=f10e2]:
+    - link "متجر ماء تطبيق المندوب" [ref=f10e3] [cursor=pointer]:
+      - /url: index.html
+      - img "متجر ماء" [ref=f10e4]
+      - generic [ref=f10e5]: تطبيق المندوب
+    - generic [ref=f10e6]:
+      - generic [ref=f10e7]: سالم المندوب
+      - generic [ref=f10e8]: مندوب
+      - button "خروج" [ref=f10e9] [cursor=pointer]
+  - main [ref=f10e10]:
+    - heading "توصيلاتي" [level=1] [ref=f10e11]
+    - generic [ref=f10e12]:
+      - button "الحالية" [ref=f10e13] [cursor=pointer]
+      - button "المسلّمة" [ref=f10e14] [cursor=pointer]
+    - article [ref=f10e15]:
+      - generic [ref=f10e16]:
+        - generic [ref=f10e17]: فاطمة الزنتاني
+        - generic [ref=f10e18]: أُسند لمندوب
+      - generic [ref=f10e19]: تاجوراء — سوق الجمعة، قرب المدرسة
+      - generic [ref=f10e20]:
+        - link "0925556677" [ref=f10e21] [cursor=pointer]:
+          - /url: tel:0925556677
+        - link "الخريطة" [ref=f10e22] [cursor=pointer]:
+          - /url: https://www.google.com/maps/search/?api=1&query=%D8%AA%D8%A7%D8%AC%D9%88%D8%B1%D8%A7%D8%A1%20%E2%80%94%20%D8%B3%D9%88%D9%82%20%D8%A7%D9%84%D8%AC%D9%85%D8%B9%D8%A9%D8%8C%20%D9%82%D8%B1%D8%A8%20%D8%A7%D9%84%D9%85%D8%AF%D8%B1%D8%B3%D8%A9
+        - generic [ref=f10e23]: طلب 51dc44d4 — 2 قطعة
+      - generic [ref=f10e24]: "حصّل: 225 د.ل"
+      - generic [ref=f10e25]:
+        - button "استلمت الطلب" [ref=f10e26] [cursor=pointer]
+        - button "تعذّر" [ref=f10e27] [cursor=pointer]
+    - button "تحديث" [ref=f10e28] [cursor=pointer]

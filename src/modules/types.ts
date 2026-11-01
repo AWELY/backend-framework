@@ -4,16 +4,44 @@ import type { Container } from "../container/container";
 import type { AccessControl } from "../engine/access-control";
 import type { Logger } from "../engine/logger";
 import type { Migration } from "../db/migrations";
-import type { ExtensionRegistry } from "./extensions";
-import type { FailureLimiter } from "../engine/rate-limiter";
+import type { Queryable } from "../db/repository";
+import type { Schema } from "../engine/validation";
+import type { MetricsRegistry } from "../engine/metrics";
+import type { Limiter } from "../engine/rate-limiter";
 import type { AppRequest } from "../engine/http/request";
+import type { JobQueue } from "../runtime/jobs";
+import type { SessionManager } from "../runtime/sessions";
+import type { AuditLog } from "../runtime/audit-log";
+import type { CommerceEvents, ExtensionRegistry } from "./extensions";
 
 /**
- * "صندوق الأدوات" الذي تستلمه كل وحدة وكل إضافة عند تسجيلها.
- *
- * الوحدات لا تُنشئ أي شيء من هذه بنفسها: createCommerceApp (src/app.ts) ينشئها مرة واحدة
- * ويعطيها للجميع. فائدة ذلك أن كل الوحدات تشترك في نفس الـ Router، ونفس الحاوية، ونفس
- * مجموعة اتصالات القاعدة، وأن الاختبار يستطيع تمرير صندوق أدوات مختلف.
+ * يكتب الأحداث في صندوق الصادر (src/runtime/outbox.ts).
+ *   publish: داخل معاملة التغيير نفسها (db = اتصال المعاملة)، فيُحفظ الحدث معها أو لا يُحفظ.
+ *   notify : بعد COMMIT، ليوصل العامل الحدث فوراً بدل انتظار دورته القادمة (تحسين، ليس شرطاً).
+ */
+export interface EventPublisher {
+  publish<E extends keyof CommerceEvents>(
+    db: Queryable,
+    event: E,
+    payload: CommerceEvents[E],
+    options?: { sensitive?: boolean }
+  ): Promise<string>;
+  notify(): void;
+}
+
+/** حدود المحاولات المتاحة للوحدات. null تعني أن الحد مطفأ. */
+export interface RateLimiters {
+  login: Limiter | null;
+  registration: Limiter | null;
+  passwordReset: Limiter | null;
+  checkout: Limiter | null;
+  cartCreation: Limiter | null;
+}
+
+/**
+ * "صندوق الأدوات" الذي تستلمه كل وحدة وكل إضافة عند الإقلاع. يبنيه createCommerceApp (src/app.ts).
+ * الوحدات لا تنشئ شيئاً من هذه بنفسها: كل شيء يأتيها من هنا (حقن الاعتماديات)، فيمكن
+ * استبدال أي جزء في الاختبار أو في متجر خاص.
  */
 export interface ModuleContext {
   /** لتسجيل مسارات الوحدة. */
@@ -30,45 +58,67 @@ export interface ModuleContext {
   /** يتعرف على المرسل إن أرسل بيانات دخول، ويسمح للمجهول بالمرور (auth.optional). */
   authenticateOptional: Handler;
   /**
-   * يصدر توكن دخول موقّعاً لزبون. الوحدات تستطيع إصدار التوكن، لكنها لا ترى سر التوقيع
-   * نفسه: الدالة "تتذكر" السر داخلياً (Closure)، وهذا تطبيق لمبدأ أقل صلاحية ممكنة.
+   * ينشئ جلسة دخول لزبون ويرجع توكنها. الوحدات تستطيع إصدار توكن، لكنها لا ترى السر.
+   * أصبحت async لأن الجلسة تُحفظ في القاعدة. للتحكم الكامل استخدم sessions.issue.
    */
-  issueCustomerToken(customerId: string): string;
-  /** طرق الشحن والدفع ومستمعو الأحداث التي تضيفها الإضافات (extensions.ts). */
+  issueCustomerToken(customerId: string, req?: AppRequest): Promise<string>;
+  /** طرق الشحن والدفع ومعدّلات السعر ومستمعو الأحداث التي تضيفها الإضافات (extensions.ts). */
   extensions: ExtensionRegistry;
   /** عدّاد محاولات الدخول الفاشلة لكل عنوان ولكل بريد، أو null إن أُطفئ حد المحاولات. */
-  loginLimiter: FailureLimiter | null;
+  loginLimiter: Limiter | null;
   /** عدّاد محاولات التسجيل لكل عنوان، أو null إن أُطفئ. */
-  registrationLimiter: FailureLimiter | null;
+  registrationLimiter: Limiter | null;
+  /** كل حدود المحاولات. */
+  limiters: RateLimiters;
   /** عنوان IP للمرسل. يأخذ X-Forwarded-For في الاعتبار فقط إن كان trustProxy مفعّلاً. */
   clientIp(req: AppRequest): string;
+  /** لكتابة الأحداث في صندوق الصادر. */
+  events: EventPublisher;
+  /** طابور المهام في الخلفية: define و enqueue و schedule. */
+  jobs: JobQueue;
+  /** جلسات الدخول: إصدار، وإلغاء، وقائمة. */
+  sessions: SessionManager;
+  /** سجل التدقيق، لأحداث أمنية لا تمر بمسار كتابة عادي (مثل دخول موظف). */
+  audit: AuditLog;
+  /** معالج Idempotency-Key جاهز، يوضع في مسار بعد المصادقة (middleware/idempotency.ts). */
+  idempotency: Handler;
+  /** سجل المقاييس، لتضيف الوحدة أو الإضافة مقاييسها. */
+  metrics: MetricsRegistry;
+  /** عملة المتجر، مثل "LYD". */
+  currency: string;
 }
 
 /**
- * العقد الذي تلتزم به كل وحدة تجارية (الأقسام، والمنتجات، والمخزون، والزبائن، والسلة، والطلبات):
- *   - name: اسمها.
- *   - migrations: سكربتات SQL لجداولها.
- *   - register: تسجّل مستودعاتها في حاوية الـ DI، ومساراتها في الـ Router.
- *
- * أي شيء يلتزم بهذا الشكل يمكن تركيبه في الإطار، وهذا ما يجعل الإطار "معيارياً" (Modular).
+ * وحدة تجارية: جداولها (migrations)، وما تسجله عند الإقلاع (register).
+ * onStart و onStop اختياريتان: تعملان قبل بدء الاستماع وعند الإيقاف.
  */
 export interface CommerceModule {
   name: string;
   migrations: Migration[];
   register(context: ModuleContext): void;
+  onStart?(context: ModuleContext): void | Promise<void>;
+  onStop?(context: ModuleContext): void | Promise<void>;
 }
 
 /**
- * الإضافة (Plugin): تُهيَّأ بعد كل الوحدات، لتستطيع استخدام أي خدمة منها (مثل طلب
- * ORDERS_SERVICE من الحاوية)، وتسجيل طرق شحن ودفع، ومستمعي أحداث، ومسارات إضافية.
+ * إضافة (Plugin): مثل الوحدة، لكنها اختيارية وتُهيَّأ بعد كل الوحدات، فتستطيع استخدام أي خدمة منها.
  *
- * الفرق عن الوحدة: الوحدة جزء أساسي من الإطار، والإضافة يختارها كل متجر حسب حاجته
- * (مثلاً AMA يختار الشحن حسب المدينة والدفع عند الاستلام)، دون تعديل كود الإطار.
- *
- * أرقام migrations الإضافات يجب أن تبدأ من "9000_"، فتُطبَّق دائماً بعد جداول الإطار.
+ *   name         : اسم فريد. اسمان متطابقان خطأ عند الإقلاع.
+ *   version      : نسخة الإضافة (للسجل والتشخيص).
+ *   dependsOn    : أسماء وحدات أو إضافات يجب أن تُثبَّت قبلها، وإلا يفشل الإقلاع برسالة واضحة.
+ *   configSchema : شكل إعدادات الإضافة؛ config يُفحص به عند الإقلاع (لا عند أول استخدام).
+ *   migrations   : جداول الإضافة.
+ *   setup        : التسجيل (طرق شحن ودفع، ومسارات، ومستمعون، ومهام).
+ *   onStart/onStop: قبل بدء الاستماع، وعند الإيقاف (بالترتيب العكسي).
  */
 export interface CommercePlugin {
   name: string;
+  version?: string;
+  dependsOn?: string[];
+  configSchema?: Schema;
+  config?: Record<string, unknown>;
   migrations?: Migration[];
   setup(context: ModuleContext): void;
+  onStart?(context: ModuleContext): void | Promise<void>;
+  onStop?(context: ModuleContext): void | Promise<void>;
 }

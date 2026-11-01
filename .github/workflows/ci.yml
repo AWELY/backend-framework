@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: maa
+          POSTGRES_PASSWORD: maa
+          POSTGRES_DB: maa_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://maa:maa@localhost:5432/maa_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Lint (layer rules, no casts, no any, no console)
+        run: npm run lint
+      - name: Type-check and build
+        run: npm run build
+      - name: OpenAPI is up to date
+        run: npm run openapi:check
+      - name: Tests with coverage gate
+        run: npm run test:coverage
+      - name: Dependency audit
+        run: npm audit --omit=dev --audit-level=high
+      - name: End-to-end verification (CLI store, demo store, storefront)
+        run: |
+          printf 'OWNER_API_KEY=%s\nAUTH_TOKEN_SECRET=%s\nDATABASE_URL=%s\nTEST_DATABASE_URL=%s\n' \
+            "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$TEST_DATABASE_URL" "$TEST_DATABASE_URL" > .env
+          npm run verify
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t maa:ci .

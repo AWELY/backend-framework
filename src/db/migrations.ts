@@ -84,3 +84,18 @@ export async function runMigrations(
     client.release();
   }
 }
+
+/**
+ * أرقام الـ migrations التي لم تُطبَّق بعد على هذه القاعدة. لا يغيّر شيئاً.
+ * يستخدمها GET /readyz: نسخة جديدة من الكود على قاعدة لم تُحدَّث بعد يجب ألا تستقبل طلبات،
+ * لأن استعلاماتها تتوقع أعمدة غير موجودة.
+ */
+export async function pendingMigrations(pool: Pool, migrations: Migration[]): Promise<string[]> {
+  const { rows } = await pool.query<{ exists: boolean }>("SELECT to_regclass('schema_migrations') IS NOT NULL AS exists");
+  const done = new Set<string>();
+  if (rows[0]?.exists) {
+    const applied = await pool.query<{ id: string }>("SELECT id FROM schema_migrations");
+    for (const r of applied.rows) done.add(r.id);
+  }
+  return migrations.map((m) => m.id).filter((id) => !done.has(id)).sort();
+}

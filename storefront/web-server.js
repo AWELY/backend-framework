@@ -130,5 +130,5 @@ server.on("error", (err) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`AMA website on http://localhost:${PORT}  (API expected on port ${API_PORT})`);
+  console.log(`Maa website on http://localhost:${PORT}  (API expected on port ${API_PORT})`);
 });

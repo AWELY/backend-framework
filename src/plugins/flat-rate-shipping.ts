@@ -18,7 +18,7 @@ export interface FlatRateShippingOptions {
  * يمكن تثبيتها أكثر من مرة بمعرّفات مختلفة لتقديم عدة خيارات. مثلاً المتجر التجريبي:
  *   flatRateShipping({ name: "Standard delivery (2-4 days)", rate: 10000, freeOver: 200000 }),
  *   flatRateShipping({ id: "express", name: "Express delivery (next day)", rate: 25000 }),
- * ومتجر AMA يستخدمها للاستلام من المحل بسعر 0:
+ * ومتجر ماء يستخدمها للاستلام من المحل بسعر 0:
  *   flatRateShipping({ id: "pickup", name: "استلام من المحل - تاجوراء", rate: 0 })
  */
 export function flatRateShipping(options: FlatRateShippingOptions): CommercePlugin {

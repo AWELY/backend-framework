@@ -1,5 +1,5 @@
 /*
- * تنسيق موقع متجر AMA: ملف تنسيق واحد لكل الصفحات، من اليمين إلى اليسار (RTL)، و"الهاتف أولاً".
+ * تنسيق موقع متجر ماء: ملف تنسيق واحد لكل الصفحات، من اليمين إلى اليسار (RTL)، و"الهاتف أولاً".
  *
  * "الهاتف أولاً" (Mobile first): القواعد الأساسية مكتوبة لشاشة الهاتف، ثم تضيف قواعد
  * @media (min-width: ...) في آخر الملف أعمدة أكثر للشاشات الأكبر.
@@ -450,3 +450,65 @@ form.panel h3:first-of-type { margin-top: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* =========================================================================
+ * إضافات الموقع بعد التحسين: الأشكال، والترقيم، والكوبون، والسجل الزمني، والتوصيل،
+ * والجلسات، وصفحة الدفع التجريبية.
+ * ========================================================================= */
+
+.btn-sm { padding: 6px 14px; font-size: 0.9rem; min-height: 0; }
+
+/* ترقيم الصفحات */
+.pager { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; margin: 28px 0 8px; }
+.pager a, .pager span {
+  min-width: 40px; padding: 6px 12px; border-radius: var(--radius-sm);
+  background: var(--card); border: 1px solid var(--line); text-align: center; font-weight: 600;
+}
+.pager a:hover { border-color: var(--orange); color: var(--orange-dark); }
+.pager a.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+.pager span { border: none; background: none; color: var(--muted); }
+
+/* أشكال المنتج (لون أو مقاس) */
+.variants { margin: 16px 0; }
+.variant-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.variant-chip {
+  font: inherit; cursor: pointer; padding: 8px 16px; border-radius: 999px;
+  background: var(--card); border: 2px solid var(--line); color: var(--text);
+}
+.variant-chip:hover:not(:disabled) { border-color: var(--orange); }
+.variant-chip.active { border-color: var(--orange); background: var(--orange-soft); font-weight: 700; }
+.variant-chip.out, .variant-chip:disabled { opacity: 0.5; cursor: not-allowed; text-decoration: line-through; }
+.variant-tag { display: inline-block; margin: 2px 0; padding: 0 10px; border-radius: 999px; background: var(--surface); font-size: 0.9rem; }
+
+/* الكوبون */
+.coupon-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; }
+.coupon-row .error { grid-column: 1 / -1; }
+.field.valid .error { color: var(--green); }
+.adjustment.discount span:last-child, .adjustment.discount td:last-child { color: var(--green); font-weight: 700; }
+
+/* الجلسات في صفحة الحساب */
+.sessions-list { list-style: none; padding: 0; margin: 0 0 16px; }
+.sessions-list li { display: flex; flex-direction: column; padding: 10px 0; border-bottom: 1px solid var(--line); }
+
+/* رسالة وضع التجربة (صندوق البريد التجريبي) */
+.dev-hint { margin-top: 12px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--amber-bg); border: 1px dashed var(--orange); }
+.dev-hint a { color: var(--orange-dark); text-decoration: underline; margin-inline-start: 6px; }
+
+/* التوصيل والسجل الزمني في بطاقة الطلب */
+.delivery-box { display: flex; gap: 12px; align-items: flex-start; margin: 12px 0; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--surface); }
+.delivery-box div { display: flex; flex-direction: column; }
+.timeline-box { margin-top: 12px; }
+.timeline-box summary { cursor: pointer; font-weight: 700; }
+.timeline { list-style: none; padding: 0; margin: 10px 0 0; border-inline-start: 2px solid var(--line); }
+.timeline li { position: relative; padding: 4px 16px 10px; display: flex; flex-direction: column; }
+.timeline li::before {
+  content: ""; position: absolute; inset-inline-start: -7px; top: 10px; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--orange); border: 2px solid var(--card);
+}
+.timeline .when { font-size: 0.85rem; color: var(--muted); }
+
+/* صفحة الدفع التجريبية */
+.pay-card { text-align: center; }
+.pay-brand { display: flex; gap: 8px; justify-content: center; align-items: center; color: var(--navy); font-size: 1.1rem; }
+.pay-amount { font-size: 2.4rem; font-weight: 900; color: var(--navy); margin: 8px 0; }
+.pay-card .field { text-align: start; }

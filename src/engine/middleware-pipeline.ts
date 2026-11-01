@@ -22,32 +22,39 @@ export function runPipeline(
   res: AppResponse,
   onError: (err: unknown) => void
 ): void {
-  // رقم المعالج التالي. الدالة next "تتذكره" بين الاستدعاءات (Closure).
-  let index = 0;
-
-  const next: NextFunction = (err?: unknown) => {
-    // next(err): توقف السلسلة، والخطأ يذهب لمعالج الأخطاء.
-    if (err !== undefined) {
-      onError(err);
-      return;
-    }
-    // نأخذ المعالج الحالي ثم نزيد الرقم (index++ تعطي القيمة قبل الزيادة).
-    const handler = handlers[index++];
-    // انتهت القائمة: لا شيء نفعله.
-    if (!handler) return;
-    try {
-      const result = handler(req, res, next);
-      // معالج async يرجع Promise: إن رُفض لاحقاً (خطأ بعد await)، نلتقطه هنا.
-      // بدون هذا السطر يصبح الخطأ "Unhandled rejection" خارج سيطرتنا.
-      if (result instanceof Promise) {
-        result.catch(onError);
+  // dispatch(i) تصنع دالة next خاصة بالمعالج رقم i. لكل معالج next خاصة به، تعمل مرة واحدة فقط:
+  // معالج يستدعي next() مرتين بالخطأ (مثلاً في فرعين من if) كان سيشغّل بقية السلسلة مرتين،
+  // فيُرسل ردان أو تُنفَّذ عملية الكتابة مرتين. الاستدعاء الثاني يُتجاهل ويُسجَّل تحذيراً.
+  const dispatch = (index: number): NextFunction => {
+    let called = false;
+    return (err?: unknown) => {
+      if (called) {
+        req.log?.warn("next() was called more than once by the same handler", { route: req.route, index });
+        return;
       }
-    } catch (syncErr) {
-      // معالج عادي (غير async) رمى خطأ مباشرة.
-      onError(syncErr);
-    }
+      called = true;
+      // next(err): توقف السلسلة، والخطأ يذهب لمعالج الأخطاء.
+      if (err !== undefined) {
+        onError(err);
+        return;
+      }
+      const handler = handlers[index];
+      // انتهت القائمة: لا شيء نفعله.
+      if (!handler) return;
+      try {
+        const result = handler(req, res, dispatch(index + 1));
+        // معالج async يرجع Promise: إن رُفض لاحقاً (خطأ بعد await)، نلتقطه هنا.
+        // بدون هذا السطر يصبح الخطأ "Unhandled rejection" خارج سيطرتنا.
+        if (result instanceof Promise) {
+          result.catch(onError);
+        }
+      } catch (syncErr) {
+        // معالج عادي (غير async) رمى خطأ مباشرة.
+        onError(syncErr);
+      }
+    };
   };
 
   // نبدأ السلسلة بتشغيل أول معالج.
-  next();
+  dispatch(0)();
 }

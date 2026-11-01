@@ -1,4 +1,4 @@
-// اختبار شامل لموقع AMA في متصفح حقيقي (End-to-End): يشغّل متصفحاً من عائلة Chromium
+// اختبار شامل لموقع Maa في متصفح حقيقي (End-to-End): يشغّل متصفحاً من عائلة Chromium
 // (Edge أو Chrome أو Chromium) بلا واجهة (headless)، ويقوده في رحلة شراء كاملة عبر
 // بروتوكول أدوات المطوّر (DevTools Protocol)، دون أي مكتبة اختبار.
 // يلتقط صورة لكل صفحة، ويفشل عند أي خطأ JavaScript أو أي مخالفة لسياسة أمان المحتوى (CSP).
@@ -38,9 +38,11 @@ function findBrowser() {
           "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
           "C:/Program Files/Google/Chrome/Application/chrome.exe",
         ]
-      : ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge"];
+      : process.platform === "darwin"
+        ? ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/Applications/Chromium.app/Contents/MacOS/Chromium", "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"]
+        : ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge"];
   for (const c of candidates) {
-    if (process.platform === "win32" ? existsSync(c) : (() => { try { return execSync(`command -v ${c}`, { stdio: "pipe" }).length > 0; } catch { return false; } })()) return c;
+    if (process.platform === "win32" || process.platform === "darwin" ? existsSync(c) : (() => { try { return execSync(`command -v ${c}`, { stdio: "pipe" }).length > 0; } catch { return false; } })()) return c;
   }
   throw new Error("No Edge/Chrome/Chromium found - set BROWSER_PATH to your browser executable.");
 }
@@ -48,7 +50,7 @@ function findBrowser() {
 // منفذ أدوات المطوّر عشوائي في كل تشغيل، فلا يتصل الاختبار أبداً بمتصفح بقي من تشغيل سابق.
 const PORT = 9300 + Math.floor(Math.random() * 600);
 // ملف تعريف (Profile) جديد ومؤقت: لا يلمس متصفح المستخدم ولا بياناته.
-const profile = mkdtempSync(join(tmpdir(), "ama-browser-test-"));
+const profile = mkdtempSync(join(tmpdir(), "maa-browser-test-"));
 const browser = spawn(findBrowser(), [
   "--headless=new", "--disable-gpu", "--no-first-run", "--no-sandbox", `--remote-debugging-port=${PORT}`,
   `--user-data-dir=${profile}`, "--window-size=1366,900", "about:blank",
@@ -101,8 +103,8 @@ await send("Page.enable");
 await send("Runtime.enable");
 await send("Log.enable");
 // عنوان API غير افتراضي يُعطى للموقع بنفس الطريقة التي يُعطى بها في النشر الحقيقي
-// (window.AMA_API_BASE، انظر web/js/config.js)، ويُحقن قبل تحميل أي صفحة.
-if (process.env.API) await send("Page.addScriptToEvaluateOnNewDocument", { source: `window.AMA_API_BASE = ${JSON.stringify(API)};` });
+// (window.MAA_API_BASE، انظر web/js/config.js)، ويُحقن قبل تحميل أي صفحة.
+if (process.env.API) await send("Page.addScriptToEvaluateOnNewDocument", { source: `window.MAA_API_BASE = ${JSON.stringify(API)};` });
 
 /** ينفّذ تعبير JavaScript داخل الصفحة، وينتظر نتيجته إن كانت وعداً، ويرجع قيمتها. */
 const evaluate = async (expr) => {
@@ -146,7 +148,9 @@ const log = (m) => console.log(m);
 try {
   // 1. الرئيسية: 16 بطاقة منتج، وأزرار المنتجات التي نفدت معطلة.
   await go("/index.html");
-  await waitFor(`document.querySelectorAll(".card").length >= 16`, "16 product cards");
+  // 12 منتجاً في الصفحة (الترقيم في الخادم)، والعدد الكلي في عنوان القسم.
+  await waitFor(`document.querySelectorAll(".card").length === 12`, "12 product cards on page 1");
+  await waitFor(`document.querySelector(".pager a")`, "pagination");
   log(`home: ${await evaluate(`document.querySelectorAll(".card").length`)} cards, out-of-stock buttons disabled: ${await evaluate(`[...document.querySelectorAll("[data-add]")].filter(b=>b.disabled).length`)}`);
   await shot("1-home");
 
@@ -159,7 +163,7 @@ try {
   log(`search 'باور': ${await evaluate(`document.querySelectorAll(".card").length`)} cards`);
 
   // 3. ضيف يضيف منتجاً من الرئيسية: رقم السلة في الرأس يصبح 1.
-  await go("/index.html");
+  await go("/index.html?q=" + encodeURIComponent("شاحن سريع"));
   await waitFor(`document.querySelector("[data-add]:not([disabled])")`, "add buttons");
   await evaluate(`[...document.querySelectorAll(".card")].find(c => c.textContent.includes("شاحن سريع 20")).querySelector("[data-add]").click()`);
   await waitFor(`document.querySelector("[data-cart-count]")?.textContent === "1"`, "cart badge = 1");
@@ -240,17 +244,62 @@ try {
   await evaluate(`(() => { const c=document.querySelector("#city"); c.value="تاجوراء"; c.dispatchEvent(new Event("change",{bubbles:true}));
     document.querySelector("[data-form]").shippingAddress.value="تاجوراء، الحميدية"; })()`);
   await waitFor(`document.querySelector("[data-shipping]").textContent.includes("5")`, "Tajoura price");
+  // كوبون: الخصم يظهر في الملخص (POST /checkout/quote مع couponCode).
+  await evaluate(`(() => { const f=document.querySelector("[data-form]"); f.couponCode.value="WELCOME10"; document.querySelector("[data-apply-coupon]").click(); })()`);
+  await waitFor(`document.querySelector(".adjustment.discount")`, "coupon discount line");
+  log(`coupon WELCOME10: ${await evaluate(`document.querySelector(".adjustment.discount").textContent.replace(/\\s+/g," ")`)}, total=${await evaluate(`document.querySelector("[data-total]").textContent`)}`);
   await evaluate(`document.querySelector("[data-submit]").click()`);
   await waitFor(`document.querySelector(".order-id")`, "customer order confirmation");
   await go("/orders.html");
   await waitFor(`document.querySelectorAll(".order-card").length === 1`, "1 order in My orders");
   log(`my orders: ${await evaluate(`document.querySelectorAll(".order-card").length`)} order, city: ${await evaluate(`document.querySelector(".items-table").textContent.includes("تاجوراء")`)}`);
   await shot("7-my-orders");
+  const customerOrderId = await evaluate(`document.querySelector(".order-card").dataset.order`);
+
+  // لوحة الإدارة: دخول المدير (حساب من seed)، وإسناد الطلب لمندوب.
+  await go("/admin.html");
+  await waitFor(`document.querySelector("[data-staff-login]")`, "admin login");
+  await evaluate(`(() => { const f=document.querySelector("[data-staff-login]"); f.email.value="admin@maa.ly"; f.password.value="maa-admin-2026"; f.requestSubmit(); })()`);
+  await waitFor(`document.querySelector(".kpis")`, "admin dashboard");
+  log(`admin dashboard: ${await evaluate(`[...document.querySelectorAll(".kpi")].map(k=>k.innerText.replace(/\\s+/g," ")).join(" | ")`)}`);
+  await shot("9-admin-dashboard", false);
+  await go("/admin.html#/orders");
+  await waitFor(`document.querySelector(\`[data-open="${customerOrderId}"]\`)`, "customer order in the admin list");
+  await evaluate(`document.querySelector(\`[data-open="${customerOrderId}"]\`).click()`);
+  await waitFor(`document.querySelector("[data-assign]")`, "assign form");
+  await evaluate(`document.querySelector("[data-assign]").click()`);
+  await waitFor(`document.querySelector("dialog")?.textContent.includes("إعادة الإسناد")`, "order assigned");
+  log(`admin: order assigned to ${await evaluate(`document.querySelector("[data-courier] option:checked").textContent`)}`);
+  await shot("10-admin-order", false);
+
+  // تطبيق المندوب: خروج المدير، ودخول المندوب، ثم الاستلام والتسليم مع التحصيل.
+  await evaluate(`document.querySelector("[data-logout]").click()`);
+  await waitFor(`document.querySelector("[data-staff-login]")`, "admin logged out");
+  await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await go("/courier.html");
+  await waitFor(`document.querySelector("[data-staff-login]")`, "courier login");
+  await evaluate(`(() => { const f=document.querySelector("[data-staff-login]"); f.email.value="courier1@maa.ly"; f.password.value="maa-courier-2026"; f.requestSubmit(); })()`);
+  await waitFor(`document.querySelector(\`[data-pickup="${customerOrderId}"]\`)`, "job in the courier app");
+  await shot("11-courier", false);
+  await evaluate(`document.querySelector(\`[data-pickup="${customerOrderId}"]\`).click()`);
+  await waitFor(`document.querySelector(\`[data-deliver="${customerOrderId}"]\`)`, "picked up");
+  await evaluate(`document.querySelector(\`[data-deliver="${customerOrderId}"]\`).click()`);
+  await waitFor(`document.querySelector("dialog form")`, "deliver dialog");
+  await evaluate(`document.querySelector("dialog form").requestSubmit()`);
+  await waitFor(`!document.querySelector(\`[data-job="${customerOrderId}"]\`)`, "job delivered");
+  log("courier: picked up and delivered with cash collection");
+  await evaluate(`document.querySelector("[data-logout]").click()`);
+  await send("Emulation.clearDeviceMetricsOverride");
+
+  // الزبون يرى النتيجة: "تم التوصيل" والسجل الزمني كاملاً.
+  await go("/orders.html");
+  await waitFor(`document.querySelector(".order-card .status.delivered")`, "delivered in My orders");
+  log(`customer timeline: ${await evaluate(`document.querySelectorAll(".timeline li").length`)} events, delivery box: ${await evaluate(`document.querySelector(".delivery-box b").textContent`)}`);
 
   // 9. الرئيسية على شاشة هاتف (390×844).
   await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await go("/index.html");
-  await waitFor(`document.querySelectorAll(".card").length >= 16`, "mobile home");
+  await waitFor(`document.querySelectorAll(".card").length === 12`, "mobile home");
   await shot("8-mobile", false);
 
   // 10. الأمان: منتج اسمه يحتوي HTML يجب أن يظهر نصاً، ولا يُنفَّذ أبداً كـ HTML (حماية من XSS).

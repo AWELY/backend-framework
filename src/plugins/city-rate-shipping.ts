@@ -25,7 +25,7 @@ export interface CityRateShippingOptions {
  * الإضافة نفسها بدل كتابتها في كود الموقع. وترفض المدينة التي لا تخدمها برد 400 يذكر
  * المدن المتاحة.
  *
- * متجر AMA يستخدمها بـ 16 مدينة (DELIVERY_RATES في storefront/api/app.js)،
+ * متجر ماء يستخدمها بـ 16 مدينة (DELIVERY_RATES في storefront/api/app.js)،
  * والتوصيل مجاني فوق 500 دينار.
  */
 export function cityRateShipping(options: CityRateShippingOptions): CommercePlugin {

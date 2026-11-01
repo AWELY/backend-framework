@@ -1,0 +1,164 @@
+- generic:
+  - banner:
+    - link:
+      - /url: index.html
+      - generic: لوحة الإدارة
+    - generic:
+      - generic: مدير المتجر
+      - generic: مدير
+      - button: خروج
+  - main:
+    - generic:
+      - navigation:
+        - link:
+          - /url: "#/"
+          - text: البداية
+        - link:
+          - /url: "#/orders"
+          - text: الطلبات
+        - link:
+          - /url: "#/deliveries"
+          - text: التوصيل
+        - link:
+          - /url: "#/products"
+          - text: المنتجات
+        - link:
+          - /url: "#/categories"
+          - text: الأقسام
+        - link:
+          - /url: "#/coupons"
+          - text: الكوبونات
+        - link:
+          - /url: "#/customers"
+          - text: الزبائن
+        - link:
+          - /url: "#/staff"
+          - text: الموظفون
+        - link:
+          - /url: "#/audit"
+          - text: سجل التدقيق
+      - generic:
+        - heading [level=1]: البداية
+        - generic:
+          - link:
+            - /url: "#/orders?status=pending"
+            - generic: "2"
+            - generic: طلبات تنتظر التأكيد
+          - link:
+            - /url: "#/orders?status=confirmed"
+            - generic: "0"
+            - generic: مؤكدة، تنتظر المندوب
+          - link:
+            - /url: "#/orders?status=shipped"
+            - generic: "0"
+            - generic: في الطريق
+          - link:
+            - /url: "#/orders?payment=failed"
+            - generic: "0"
+            - generic: فشل دفعها
+          - link:
+            - /url: "#/deliveries"
+            - generic: "0"
+            - generic: توصيلات لم تنجح
+          - generic:
+            - generic: "2"
+            - generic: كل الطلبات
+        - heading [level=2]: آخر الطلبات
+        - generic:
+          - table:
+            - rowgroup:
+              - row:
+                - columnheader: الطلب
+                - columnheader: الزبون
+                - columnheader: الإجمالي
+                - columnheader: الحالة
+                - columnheader: الدفع
+            - rowgroup:
+              - row:
+                - cell: 51dc44d4
+                - cell: فاطمة الزنتاني
+                - cell: 225 د.ل
+                - cell:
+                  - generic: قيد المراجعة
+                - cell:
+                  - generic: بانتظار الدفع
+              - row:
+                - cell: d3aca07c
+                - cell: أحمد الورفلي
+                - cell: 253 د.ل
+                - cell:
+                  - generic: قيد المراجعة
+                - cell:
+                  - generic: مدفوع
+  - dialog [ref=f7e105]:
+    - generic [ref=f7e106]:
+      - heading "تفاصيل الطلب" [level=2] [ref=f7e107]
+      - button "إغلاق" [active] [ref=f7e108] [cursor=pointer]: ×
+    - generic [ref=f7e109]:
+      - generic [ref=f7e110]:
+        - generic [ref=f7e111]: قيد المراجعة
+        - generic [ref=f7e112]: بانتظار الدفع
+        - generic [ref=f7e113]: 51dc44d4-bf9a-422e-b7b9-b154f0681d46
+      - generic [ref=f7e114]:
+        - term [ref=f7e115]: الزبون
+        - definition [ref=f7e116]:
+          - text: فاطمة الزنتاني —
+          - link "0925556677" [ref=f7e117] [cursor=pointer]:
+            - /url: tel:0925556677
+        - term [ref=f7e118]: العنوان
+        - definition [ref=f7e119]: تاجوراء — سوق الجمعة، قرب المدرسة
+        - term [ref=f7e120]: الشحن
+        - definition [ref=f7e121]: city-rate
+        - term [ref=f7e122]: الدفع
+        - definition [ref=f7e123]: cod
+        - term [ref=f7e124]: التاريخ
+        - definition [ref=f7e125]: 02‏/11‏/2026، 1:10 ص
+      - table [ref=f7e127]:
+        - rowgroup [ref=f7e128]:
+          - row [ref=f7e129]:
+            - columnheader "المنتج" [ref=f7e130]
+            - columnheader "SKU" [ref=f7e131]
+            - columnheader "السعر" [ref=f7e132]
+            - columnheader "الكمية" [ref=f7e133]
+            - columnheader "المجموع" [ref=f7e134]
+        - rowgroup [ref=f7e135]:
+          - row [ref=f7e136]:
+            - cell "باور بانك 20000 مللي أمبير شحن سريع" [ref=f7e137]
+            - cell "—" [ref=f7e138]
+            - cell "110 د.ل" [ref=f7e139]
+            - cell "2" [ref=f7e140]
+            - cell "220 د.ل" [ref=f7e141]
+          - row [ref=f7e142]:
+            - cell "المجموع" [ref=f7e143]
+            - cell "220 د.ل" [ref=f7e144]
+          - row [ref=f7e145]:
+            - cell "التوصيل" [ref=f7e146]
+            - cell "5 د.ل" [ref=f7e147]
+          - row [ref=f7e148]:
+            - cell "الإجمالي" [ref=f7e149]
+            - cell "225 د.ل" [ref=f7e150]
+      - generic [ref=f7e151]:
+        - heading "الإجراءات" [level=3] [ref=f7e152]
+        - textbox "ملاحظة على التغيير (اختياري، تظهر في السجل)" [ref=f7e154]
+        - generic [ref=f7e155]:
+          - 'button "تغيير إلى: تم التأكيد" [ref=f7e156] [cursor=pointer]'
+          - button "إلغاء الطلب" [ref=f7e157] [cursor=pointer]
+          - 'button "الدفع: مدفوع" [ref=f7e158] [cursor=pointer]'
+          - 'button "الدفع: فشل الدفع" [ref=f7e159] [cursor=pointer]'
+      - generic [ref=f7e160]:
+        - heading "التوصيل" [level=3] [ref=f7e161]
+        - paragraph [ref=f7e162]: لم يُسند لمندوب بعد.
+        - generic [ref=f7e163]:
+          - combobox [ref=f7e164]:
+            - option "سالم المندوب (0920000001)" [selected]
+            - option "علي المندوب (0920000002)"
+          - button "إسناد" [ref=f7e165] [cursor=pointer]
+      - generic [ref=f7e166]:
+        - heading "سجل الطلب" [level=3] [ref=f7e167]
+        - list [ref=f7e168]:
+          - listitem [ref=f7e169]:
+            - generic [ref=f7e170]: 02‏/11‏/2026، 1:10 ص — guest
+            - generic [ref=f7e171]: تم استلام الطلب
+          - listitem [ref=f7e172]:
+            - generic [ref=f7e173]: 02‏/11‏/2026، 1:10 ص — system
+            - generic [ref=f7e174]: "الدفع: بانتظار الدفع"

@@ -3,6 +3,7 @@ import "dotenv/config";
 import { createPool } from "./db/connection";
 import { runMigrations } from "./db/migrations";
 import { coreModules, collectMigrations } from "./modules";
+import { runtimeMigrations } from "./runtime/migrations";
 
 /**
  * الأمر npm run migrate في مجلد الإطار: ينشئ جداول كل الوحدات المدمجة أو يحدّثها،
@@ -17,7 +18,7 @@ async function main(): Promise<void> {
   if (!url) throw new Error("DATABASE_URL is not set (see .env.example)");
   const pool = createPool(url);
   try {
-    const applied = await runMigrations(pool, collectMigrations(coreModules), (m) => console.log(m));
+    const applied = await runMigrations(pool, [...runtimeMigrations, ...collectMigrations(coreModules)], (m) => console.log(m));
     console.log(applied.length ? `Done: ${applied.length} migration(s) applied.` : "Database is already up to date.");
   } finally {
     // يعمل دائماً، نجح أو فشل: نغلق الاتصالات، وإلا بقي البرنامج يعمل ولم ينتهِ.

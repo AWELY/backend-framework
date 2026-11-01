@@ -1,0 +1,112 @@
+- generic [active] [ref=f4e1]:
+  - generic [ref=f4e3]:
+    - generic [ref=f4e4]:
+      - generic [ref=f4e5]: توصيل لكل المدن الليبية
+      - generic [ref=f4e11]: الدفع نقداً عند الاستلام
+    - generic [ref=f4e16]:
+      - generic [ref=f4e17]: طرابلس - تاجوراء
+      - generic [ref=f4e21]: يومياً 10 ص - 10 م
+  - banner [ref=f4e25]:
+    - generic [ref=f4e26]:
+      - link "متجر ماء" [ref=f4e27] [cursor=pointer]:
+        - /url: index.html
+        - img "متجر ماء" [ref=f4e28]
+      - search [ref=f4e29]:
+        - searchbox "بحث" [ref=f4e30]
+        - button "بحث" [ref=f4e31] [cursor=pointer]
+      - navigation [ref=f4e35]:
+        - link "تتبّع طلبك" [ref=f4e36] [cursor=pointer]:
+          - /url: track.html
+        - link "حسابي" [ref=f4e41] [cursor=pointer]:
+          - /url: account.html
+        - link "السلة 0" [ref=f4e46] [cursor=pointer]:
+          - /url: cart.html
+          - generic [ref=f4e51]: السلة
+          - generic [ref=f4e52]: "0"
+  - navigation "الأقسام" [ref=f4e53]:
+    - generic [ref=f4e54]:
+      - link "كل المنتجات" [ref=f4e55] [cursor=pointer]:
+        - /url: index.html#products
+      - link "باور بانك" [ref=f4e61] [cursor=pointer]:
+        - /url: index.html?category=1fd11b9e-a550-4de8-8d88-edba25051ac3#products
+      - link "جرابات وحماية" [ref=f4e62] [cursor=pointer]:
+        - /url: index.html?category=b2c68d7f-43aa-4740-a2b4-61208b8a28ca#products
+      - link "ساعات ذكية" [ref=f4e63] [cursor=pointer]:
+        - /url: index.html?category=a4938db4-75ba-4103-935b-22c3a289b203#products
+      - link "سماعات" [ref=f4e64] [cursor=pointer]:
+        - /url: index.html?category=4fece7f6-f874-4c1b-9c68-8916345a5970#products
+      - link "شواحن وكوابل" [ref=f4e65] [cursor=pointer]:
+        - /url: index.html?category=7536eddf-6326-4686-a1e5-6dcf1aedad30#products
+      - link "مكبرات صوت" [ref=f4e66] [cursor=pointer]:
+        - /url: index.html?category=5b22716f-54e0-4ba0-829e-6198fd028395#products
+  - main [ref=f4e67]:
+    - generic [ref=f4e68]:
+      - generic [ref=f4e69]: بوابة الدفع التجريبية
+      - paragraph [ref=f4e74]: هذه صفحة تجريبية تقوم مقام صفحة البنك. لا تُدخل بيانات بطاقة حقيقية.
+      - generic [ref=f4e75]: 253 د.ل
+      - paragraph [ref=f4e76]:
+        - text: طلب
+        - generic [ref=f4e77]: d3aca07c
+        - text: — أكمل الدفع قبل 02‏/11‏/2026، 1:24 ص
+      - generic [ref=f4e78]:
+        - generic [ref=f4e79]: رقم البطاقة
+        - textbox "رقم البطاقة" [ref=f4e80]: 4242 4242 4242 4242
+      - button "ادفع 253 د.ل" [ref=f4e81] [cursor=pointer]
+      - button "محاكاة رفض البطاقة" [ref=f4e82] [cursor=pointer]
+      - link "لاحقاً" [ref=f4e83] [cursor=pointer]:
+        - /url: track.html?id=d3aca07c-dbb0-4ced-9d82-8080cda3df4e&phone=0913334455
+  - contentinfo [ref=f4e84]:
+    - generic [ref=f4e85]:
+      - generic [ref=f4e86]:
+        - img "متجر ماء" [ref=f4e87]
+        - paragraph [ref=f4e88]: إلكترونيات وإكسسوارات الهواتف في طرابلس - تاجوراء. منتجات مختارة بأسعار مناسبة، وتوصيل لكل ليبيا.
+        - generic [ref=f4e89]:
+          - generic [ref=f4e90]: الدفع عند الاستلام
+          - generic [ref=f4e95]: توصيل لكل المدن
+      - generic [ref=f4e101]:
+        - heading "الأقسام" [level=4] [ref=f4e102]
+        - list [ref=f4e103]:
+          - listitem [ref=f4e104]:
+            - link "باور بانك" [ref=f4e105] [cursor=pointer]:
+              - /url: index.html?category=1fd11b9e-a550-4de8-8d88-edba25051ac3#products
+          - listitem [ref=f4e106]:
+            - link "جرابات وحماية" [ref=f4e107] [cursor=pointer]:
+              - /url: index.html?category=b2c68d7f-43aa-4740-a2b4-61208b8a28ca#products
+          - listitem [ref=f4e108]:
+            - link "ساعات ذكية" [ref=f4e109] [cursor=pointer]:
+              - /url: index.html?category=a4938db4-75ba-4103-935b-22c3a289b203#products
+          - listitem [ref=f4e110]:
+            - link "سماعات" [ref=f4e111] [cursor=pointer]:
+              - /url: index.html?category=4fece7f6-f874-4c1b-9c68-8916345a5970#products
+          - listitem [ref=f4e112]:
+            - link "شواحن وكوابل" [ref=f4e113] [cursor=pointer]:
+              - /url: index.html?category=7536eddf-6326-4686-a1e5-6dcf1aedad30#products
+          - listitem [ref=f4e114]:
+            - link "مكبرات صوت" [ref=f4e115] [cursor=pointer]:
+              - /url: index.html?category=5b22716f-54e0-4ba0-829e-6198fd028395#products
+      - generic [ref=f4e116]:
+        - heading "خدمة العملاء" [level=4] [ref=f4e117]
+        - list [ref=f4e118]:
+          - listitem [ref=f4e119]:
+            - link "تتبّع طلبك" [ref=f4e120] [cursor=pointer]:
+              - /url: track.html
+          - listitem [ref=f4e121]:
+            - link "حسابي" [ref=f4e122] [cursor=pointer]:
+              - /url: account.html
+          - listitem [ref=f4e123]:
+            - link "سلة التسوق" [ref=f4e124] [cursor=pointer]:
+              - /url: cart.html
+          - listitem [ref=f4e125]:
+            - link "تطبيق المندوب" [ref=f4e126] [cursor=pointer]:
+              - /url: courier.html
+          - listitem [ref=f4e127]:
+            - link "لوحة الإدارة" [ref=f4e128] [cursor=pointer]:
+              - /url: admin.html
+      - generic [ref=f4e129]:
+        - heading "تواصل معنا" [level=4] [ref=f4e130]
+        - list [ref=f4e131]:
+          - listitem [ref=f4e132]: طرابلس - تاجوراء
+          - listitem [ref=f4e136]: يومياً من 10 صباحاً حتى 10 مساءً
+    - generic [ref=f4e141]:
+      - generic [ref=f4e142]: © 2026 متجر ماء — جميع الحقوق محفوظة
+      - generic [ref=f4e143]: صور المنتجات للعرض التوضيحي

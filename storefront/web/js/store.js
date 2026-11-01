@@ -1,44 +1,53 @@
-// ما يتذكره المتصفح بين الصفحات: رقم السلة، وجلسة الدخول (التوكن واسم الزبون وبريده).
-// localStorage قد لا يكون متاحاً (التصفح الخاص، أو تخزين محظور)، لذلك كل وصول إليه
-// محمي بـ try/catch، فيبقى الموقع يعمل، لكن دون أن يتذكر.
+/**
+ * ما يحفظه الموقع في المتصفح (localStorage): رقم السلة، وجلسة الزبون، وجلسة الموظف.
+ *
+ * التوكن يُحفظ هنا ليبقى الزبون داخلاً بعد إغلاق الصفحة. الخطر المعروف: سكربت خبيث في الصفحة
+ * (XSS) يستطيع قراءته. لهذا: CSP صارمة (لا سكربت من خارج الموقع ولا داخل الصفحة)، وكل نص من
+ * الـ API يمر بـ esc() قبل عرضه. والجلسة تُلغى من الخادم عند الخروج (POST /customers/logout).
+ *
+ * مفتاح المالك (X-Api-Key) لا يُحفظ أبداً في localStorage: في sessionStorage فقط، فيُنسى عند إغلاق التبويب.
+ * كل القراءة والكتابة داخل try: المتصفح في الوضع الخاص قد يمنع التخزين.
+ */
+const KEYS = {
+  cart: "maa.cartId",
+  token: "maa.token",
+  customer: "maa.customer",
+  staffToken: "maa.staffToken",
+  staff: "maa.staff",
+  ownerKey: "maa.ownerKey",
+};
 
-// أسماء المفاتيح في localStorage. البادئة "ama." تمنع التصادم مع مواقع أخرى على نفس العنوان.
-const KEYS = { cart: "ama.cartId", token: "ama.token", customer: "ama.customer" };
-
-/** يقرأ قيمة، أو null إن لم توجد أو تعذرت القراءة. */
-function read(key) {
+function read(key, storage = localStorage) {
   try {
-    return localStorage.getItem(key);
+    return storage.getItem(key);
   } catch {
     return null;
   }
 }
 
-/** يكتب قيمة. null تعني الحذف. */
-function write(key, value) {
+function write(key, value, storage = localStorage) {
   try {
-    if (value === null) localStorage.removeItem(key);
-    else localStorage.setItem(key, value);
+    if (value === null) storage.removeItem(key);
+    else storage.setItem(key, value);
   } catch {
-    // التخزين غير متاح: لا شيء نفعله.
+    // التخزين ممنوع: يعمل الموقع دون حفظ.
   }
 }
 
-// رقم السلة: يُحفظ عند إنشائها، فيرجع الزائر إلى نفس سلته في كل صفحة.
+function readJson(key, storage) {
+  try {
+    return JSON.parse(read(key, storage) ?? "null");
+  } catch {
+    return null;
+  }
+}
+
 export const getCartId = () => read(KEYS.cart);
 export const setCartId = (id) => write(KEYS.cart, id);
 
-// توكن الدخول: يرسله api.js مع كل طلب.
 export const getToken = () => read(KEYS.token);
-
 /** بيانات الزبون المحفوظة (الاسم والبريد) لعرضها في الرأس، أو null. */
-export function getCustomer() {
-  try {
-    return JSON.parse(read(KEYS.customer) ?? "null");
-  } catch {
-    return null;
-  }
-}
+export const getCustomer = () => readJson(KEYS.customer);
 
 /** بعد الدخول أو التسجيل: نحفظ التوكن، والاسم والبريد فقط (لا شيء حساساً آخر). */
 export function saveSession(token, customer) {
@@ -46,8 +55,25 @@ export function saveSession(token, customer) {
   write(KEYS.customer, JSON.stringify({ name: customer.name, email: customer.email }));
 }
 
-/** تسجيل الخروج: نحذف التوكن وبيانات الزبون من المتصفح. */
+/** تسجيل الخروج من المتصفح (الخادم يُلغي الجلسة في api.js). */
 export function clearSession() {
   write(KEYS.token, null);
   write(KEYS.customer, null);
 }
+
+/** جلسة الموظف (لوحة الإدارة وتطبيق المندوب). */
+export const getStaffToken = () => read(KEYS.staffToken);
+export const getStaff = () => readJson(KEYS.staff);
+export function saveStaffSession(token, staff) {
+  write(KEYS.staffToken, token);
+  write(KEYS.staff, JSON.stringify({ id: staff.id, name: staff.name, role: staff.role, email: staff.email }));
+}
+export function clearStaffSession() {
+  write(KEYS.staffToken, null);
+  write(KEYS.staff, null);
+  write(KEYS.ownerKey, null, sessionStorage);
+}
+
+/** وضع المالك: المفتاح في sessionStorage فقط. */
+export const getOwnerKey = () => read(KEYS.ownerKey, sessionStorage);
+export const setOwnerKey = (key) => write(KEYS.ownerKey, key, sessionStorage);

@@ -10,7 +10,7 @@
  *   2. الاختبارات    : كل اختبارات الوحدة والتكامل (على PostgreSQL حقيقية).
  *   3. أداة CLI      : إنشاء متجر جديد، ثم تثبيته، ثم migrate، ثم تشغيله، ثم استدعاؤه.
  *   4. المتجر التجريبي: migrate، ثم البيانات الأولية، ثم التشغيل، ثم سيناريو الشراء ذو الـ 16 خطوة.
- *   5. متجر AMA      : الـ API والموقع: الصفحات، وترويسات الأمان، والصور، والمدن، و CORS.
+ *   5. متجر ماء      : الـ API والموقع: الصفحات، وترويسات الأمان، والصور، والمدن، و CORS.
  *
  * كل خطوة تستخدم قاعدة البيانات تستخدم TEST_DATABASE_URL (وتُمسح)، وليس بيانات التطوير أبداً.
  * المجلدات المؤقتة تُحذف في النهاية، نجح الفحص أو فشل.
@@ -138,7 +138,7 @@ async function step(name, fn) {
 }
 
 async function main() {
-  console.log("Verifying the commerce framework end to end.");
+  console.log("Verifying the Maa framework end to end.");
 
   // الخطوة 0: بدون هذه المتطلبات لا معنى لأي خطوة بعدها، فنتوقف إن فشلت.
   const ready = await step("prerequisites", async () => {
@@ -210,7 +210,7 @@ async function main() {
     let server;
     try {
       // المتجر التجريبي يحمل نسخة من الإطار في node_modules: نحدّثها ليختبر البناء الحالي.
-      rmSync(join(demoDir, "node_modules", "commerce-framework"), { recursive: true, force: true });
+      rmSync(join(demoDir, "node_modules", "maa"), { recursive: true, force: true });
       run("npm", ["install", "--loglevel=error"], demoDir);
       await resetTestDatabase();
       const env = {
@@ -236,7 +236,7 @@ async function main() {
 }
 
 /**
- * الخطوة 5: متجر AMA (الـ API والموقع معاً، على منافذ فارغة وقاعدة الاختبار).
+ * الخطوة 5: متجر ماء (الـ API والموقع معاً، على منافذ فارغة وقاعدة الاختبار).
  * يفحص: الصفحات السبع ترد 200 ومعها CSP، والسكربتات بنوعها الصحيح، وعدم تسرب .env،
  * وصورة كل منتج موجودة فعلاً، والتوصيل حسب المدينة (ومنها تاجوراء)، وطلب CORS التمهيدي،
  * وأن كل سكربتات الموقع خالية من أخطاء الصياغة (node --check).
@@ -247,7 +247,7 @@ async function storefrontStep() {
   let web;
   try {
     // نسخة الإطار في المتجر تُحدَّث، كما في المتجر التجريبي.
-    rmSync(join(storeDir, "node_modules", "commerce-framework"), { recursive: true, force: true });
+    rmSync(join(storeDir, "node_modules", "maa"), { recursive: true, force: true });
     run("npm", ["install", "--loglevel=error"], storeDir);
     await resetTestDatabase();
     const apiPort = await freePort();
@@ -268,7 +268,7 @@ async function storefrontStep() {
     web = await startServer("web-server.js", storeDir, env, `${origin}/index.html`);
 
     // كل صفحة ترد 200، ومعها سياسة أمان المحتوى.
-    for (const page of ["index", "product", "cart", "checkout", "account", "orders", "track"]) {
+    for (const page of ["index", "product", "cart", "checkout", "account", "orders", "track", "reset", "pay", "courier", "admin"]) {
       const res = await fetch(`${origin}/${page}.html`);
       if (res.status !== 200) throw new Error(`${page}.html -> ${res.status}`);
       if (!(res.headers.get("content-security-policy") ?? "").includes("script-src 'self'")) {
@@ -306,10 +306,11 @@ async function storefrontStep() {
     // node --check يفحص صياغة كل سكربت في الموقع دون تشغيله.
     const scripts = ["config", "store", "api", "ui", "icons", "order-view"]
       .map((f) => join(storeDir, "web", "js", `${f}.js`))
-      .concat(["home", "product", "cart", "checkout", "account", "orders", "track"].map((f) => join(storeDir, "web", "js", "pages", `${f}.js`)));
+      .concat(["home", "product", "cart", "checkout", "account", "orders", "track", "reset", "pay"].map((f) => join(storeDir, "web", "js", "pages", `${f}.js`)))
+      .concat(["common", "courier", "admin", "admin-orders", "admin-catalog"].map((f) => join(storeDir, "web", "js", "staff", `${f}.js`)));
     for (const file of scripts) run(process.execPath, ["--check", file], storeDir);
 
-    return `${products.length} products with photos, 7 pages with CSP, ${cityRate.cities.length} delivery cities, CORS preflight OK, ${scripts.length} scripts valid`;
+    return `${products.length} products with photos, 11 pages with CSP (shop, courier, admin), ${cityRate.cities.length} delivery cities, CORS preflight OK, ${scripts.length} scripts valid`;
   } finally {
     await stopServer(api);
     await stopServer(web);
@@ -318,7 +319,7 @@ async function storefrontStep() {
 
 // التشغيل: الخطوات 0 إلى 4، ثم خطوة المتجر إن نجح البناء، ثم الملخص دائماً.
 main()
-  .then(() => (results.some((r) => r.name === "build (TypeScript)" && r.ok) ? step("AMA storefront: API + website", storefrontStep) : undefined))
+  .then(() => (results.some((r) => r.name === "build (TypeScript)" && r.ok) ? step("Maa Store: API + website (shop, courier, admin)", storefrontStep) : undefined))
   .catch((err) => {
     results.push({ name: "verify script", ok: false });
     console.error(err);

@@ -24,6 +24,11 @@ export const categoriesMigrations: Migration[] = [
       );
     `,
   },
+  {
+    // رقم النسخة للتعديل المتفائل (ETag و If-Match): يزيد مع كل تعديل.
+    id: "0930_categories_version",
+    up: `ALTER TABLE categories ADD COLUMN version INTEGER NOT NULL DEFAULT 1;`,
+  },
 ];
 
 /**
@@ -36,7 +41,7 @@ export const categoriesMigrations: Migration[] = [
 export const categoryInputSchema = {
   name: { type: "string", minLength: 1, maxLength: 120 },
   slug: { type: "string", minLength: 1, maxLength: 120, pattern: SLUG_PATTERN },
-  description: { type: "string", maxLength: 2000, optional: true },
+  description: { type: "string", maxLength: 2000, optional: true, nullable: true },
 } as const satisfies Schema;
 
 /** نوع البيانات بعد التحقق، يُستنتج من الـ schema: { name: string; slug: string; description?: string } */
@@ -48,6 +53,8 @@ export interface Category {
   name: string;
   slug: string;
   description: string | null;
+  /** رقم النسخة، يزيد مع كل تعديل (يعود أيضاً في ترويسة ETag). */
+  version: number;
   createdAt: Date;
   updatedAt: Date;
 }

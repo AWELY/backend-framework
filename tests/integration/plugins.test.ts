@@ -121,7 +121,15 @@ test("checkout options list what the installed plugins offer", async () => {
 test("quote applies the shipping plugin's rule (free over the threshold)", async () => {
   const small = await cartWith(20000, 1);
   const q1 = await api(t.base, "POST", "/checkout/quote", { body: { cartId: small, shippingAddress: "Tripoli", shippingMethod: "flat-rate" } });
-  assert.deepEqual(q1.body, { subtotal: 20000, shippingMethod: "flat-rate", shippingCost: 10000, total: 30000 });
+  assert.deepEqual(q1.body, {
+    currency: "LYD",
+    subtotal: 20000,
+    shippingMethod: "flat-rate",
+    shippingCost: 10000,
+    adjustments: [],
+    adjustmentsTotal: 0,
+    total: 30000,
+  });
 
   const big = await cartWith(60000, 2);
   const q2 = await api(t.base, "POST", "/checkout/quote", { body: { cartId: big, shippingAddress: "Tripoli", shippingMethod: "flat-rate" } });

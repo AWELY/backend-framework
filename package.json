@@ -1,11 +1,11 @@
 {
-  "name": "commerce-framework",
-  "version": "0.1.0",
-  "description": "Lightweight, modular backend framework for headless e-commerce systems, built with Node.js and TypeScript.",
+  "name": "maa",
+  "version": "1.0.0",
+  "description": "Maa: a production-ready, modular backend framework for headless e-commerce on Node.js, TypeScript and a single PostgreSQL database.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "commerce-cli": "cli/index.js"
+    "maa": "cli/index.js"
   },
   "files": [
     "dist",
@@ -22,12 +22,26 @@
     "bench": "node bench/run.js",
     "verify": "node scripts/verify.js",
     "setup": "node scripts/setup-env.js",
-    "test": "tsc -p tsconfig.test.json && node --test --test-concurrency=1 \"build-test/tests/**/*.test.js\""
+    "test": "tsc -p tsconfig.test.json && node --test --test-concurrency=1 \"build-test/tests/**/*.test.js\"",
+    "lint": "node scripts/lint.js",
+    "openapi": "node scripts/openapi.js",
+    "openapi:check": "node scripts/openapi.js --check",
+    "test:coverage": "tsc -p tsconfig.test.json && node --test --test-concurrency=1 --experimental-test-coverage --test-coverage-include=\"build-test/src/**\" --test-coverage-lines=90 --test-coverage-branches=80 --test-coverage-functions=75 \"build-test/tests/**/*.test.js\"",
+    "check": "npm run lint && npm run build && npm run openapi:check && npm run test:coverage"
   },
   "engines": {
     "node": ">=24"
   },
-  "keywords": [],
+  "keywords": [
+    "ecommerce",
+    "headless",
+    "framework",
+    "postgresql",
+    "typescript",
+    "nodejs",
+    "rest",
+    "api"
+  ],
   "author": "",
   "license": "UNLICENSED",
   "type": "commonjs",

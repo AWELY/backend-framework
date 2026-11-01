@@ -1,8 +1,8 @@
-const { CATEGORIES_REPOSITORY, PRODUCTS_REPOSITORY, INVENTORY_REPOSITORY } = require("commerce-framework");
+const { CATEGORIES_REPOSITORY, PRODUCTS_REPOSITORY, INVENTORY_REPOSITORY, STAFF_REPOSITORY, hashPassword } = require("maa");
 const { buildApp } = require("./app");
 
 /**
- * الكتالوج التجريبي لمتجر AMA: 6 أقسام و 16 منتجاً. الأسعار بالدرهم (1 دينار = 1000).
+ * الكتالوج التجريبي لمتجر ماء: 6 أقسام و 16 منتجاً. الأسعار بالدرهم (1 دينار = 1000).
  *
  * كميات المخزون متنوعة عمداً (نفد، وبقي 2 فقط، وكمية كبيرة)، ليعرض الموقع كل حالات المخزون.
  * صورة كل منتج في web/images/products/<slug>.webp (صور مجانية من Unsplash، ومصادرها في
@@ -79,12 +79,50 @@ const CATALOGUE = [
  * npm run seed: يملأ الكتالوج. يطلب مستودعات الوحدات من حاوية الـ DI مباشرة، دون المرور
  * بالـ API، ويطابق الموجود بالـ slug فلا يكرره.
  */
+/**
+ * أشكال (Variants) لبعض المنتجات: لون الجراب، ومقاس الساعة (المقاس الأكبر بسعر خاص).
+ * لكل شكل SKU ومخزون خاص به.
+ */
+const VARIANTS = {
+  "silicone-case": [
+    { sku: "CASE-SIL-BLK", title: "أسود", stock: 25 },
+    { sku: "CASE-SIL-CLR", title: "شفاف", stock: 20 },
+    { sku: "CASE-SIL-BLU", title: "أزرق", stock: 0 },
+  ],
+  "sport-smartwatch": [
+    { sku: "WATCH-SPT-42", title: "مقاس 42 ملم", stock: 5 },
+    { sku: "WATCH-SPT-46", title: "مقاس 46 ملم", price: 270000, stock: 3 },
+  ],
+};
+
+/** كوبونات للتجربة. */
+const COUPONS = [
+  { code: "WELCOME10", kind: "percent", value: 10, minSubtotal: 0 },
+  { code: "SAVE20", kind: "fixed", value: 20000, minSubtotal: 200000 },
+];
+
+/**
+ * حسابات موظفين للتجربة (كلمات مرور التطوير فقط؛ غيّرها في أي متجر حقيقي من لوحة الإدارة بمفتاح المالك).
+ * المدير والمشرف والدعم يدخلون لوحة الإدارة (admin.html)، والمندوبان تطبيق التوصيل (courier.html).
+ */
+const STAFF = [
+  { email: "admin@maa.ly", password: "maa-admin-2026", name: "مدير المتجر", role: "admin", phone: "0910000001" },
+  { email: "manager@maa.ly", password: "maa-manager-2026", name: "مشرف الطلبات", role: "manager", phone: "0910000002" },
+  { email: "support@maa.ly", password: "maa-support-2026", name: "خدمة العملاء", role: "support", phone: "0910000003" },
+  { email: "courier1@maa.ly", password: "maa-courier-2026", name: "سالم المندوب", role: "courier", phone: "0920000001" },
+  { email: "courier2@maa.ly", password: "maa-courier-2026", name: "علي المندوب", role: "courier", phone: "0920000002" },
+];
+
+/**
+ * يملأ القاعدة. آمن عند التكرار: ما يوجد لا يُنشأ مرة ثانية، فيطبع "nothing to do" في المرة الثانية.
+ */
 async function main() {
   // "warn": سجل هادئ أثناء الملء.
   const { app } = buildApp("warn");
   const categories = app.container.resolve(CATEGORIES_REPOSITORY);
   const products = app.container.resolve(PRODUCTS_REPOSITORY);
   const inventory = app.container.resolve(INVENTORY_REPOSITORY);
+  const staff = app.container.resolve(STAFF_REPOSITORY);
   let created = 0;
   try {
     const existingCategories = await categories.findAll({ limit: 100 });
@@ -98,29 +136,53 @@ async function main() {
       for (const item of group.products) {
         // مسار الصورة على موقع المتجر نفسه، يقدمه web-server.js من مجلد web.
         const imageUrl = `/images/products/${item.slug}.webp`;
-        const existing = existingProducts.find((p) => p.slug === item.slug);
-        if (existing) {
+        let product = existingProducts.find((p) => p.slug === item.slug);
+        if (product) {
           // القواعد التي مُلئت قبل إضافة الصور الحقيقية ما زالت تشير إلى الرسومات القديمة،
           // فنحدّث مسار الصورة فقط، ولا نلمس السعر ولا المخزون.
-          if (existing.imageUrl !== imageUrl) {
-            await products.update(existing.id, { imageUrl });
+          if (product.imageUrl !== imageUrl) {
+            await products.update(product.id, { imageUrl });
             created++;
           }
-          continue;
+        } else {
+          product = await products.create({
+            name: item.name,
+            slug: item.slug,
+            description: item.description,
+            price: item.price,
+            categoryId: category.id,
+            imageUrl,
+          });
+          await inventory.set(product.id, item.stock);
+          created++;
         }
-        const product = await products.create({
-          name: item.name,
-          slug: item.slug,
-          description: item.description,
-          price: item.price,
-          categoryId: category.id,
-          imageUrl,
-        });
-        await inventory.set(product.id, item.stock);
-        created++;
+        const existingVariants = await products.listVariants(product.id, { includeInactive: true });
+        for (const [position, v] of (VARIANTS[item.slug] ?? []).entries()) {
+          if (existingVariants.some((e) => e.sku === v.sku)) continue;
+          const variant = await products.createVariant(product.id, { sku: v.sku, title: v.title, price: v.price ?? null, position });
+          await inventory.setVariant(variant.id, v.stock);
+          created++;
+        }
       }
     }
+
+    for (const c of COUPONS) {
+      const result = await app.pool.query(
+        `INSERT INTO coupons (code, kind, value, min_subtotal) VALUES ($1, $2, $3, $4) ON CONFLICT (code) DO NOTHING`,
+        [c.code, c.kind, c.value, c.minSubtotal]
+      );
+      created += result.rowCount ?? 0;
+    }
+
+    for (const member of STAFF) {
+      if (await staff.findCredentials(member.email)) continue;
+      await staff.create({ ...member, passwordHash: await hashPassword(member.password) });
+      created++;
+    }
+
     console.log(created ? `Seeded ${created} record(s).` : "Catalogue already seeded - nothing to do.");
+    console.log("Staff accounts (development only):");
+    for (const m of STAFF) console.log(`  ${m.role.padEnd(8)} ${m.email.padEnd(18)} ${m.password}`);
   } finally {
     await app.pool.end();
   }

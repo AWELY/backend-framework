@@ -1,37 +1,37 @@
 require("dotenv").config({ quiet: true });
 const {
   loadConfig,
-  Logger,
   createCommerceApp,
+  optionsFromConfig,
+  installShutdownHandlers,
   cashOnDelivery,
   flatRateShipping,
-} = require("commerce-framework");
+  coupons,
+} = require("maa");
 
-// الـ API الكامل للمتجر يأتي من createCommerceApp: الأقسام، والمنتجات، والمخزون، والزبائن،
-// والسلال، والطلبات، مع المصادقة، والتحقق من المدخلات، والسجل، ومعالجة الأخطاء.
-// شغّل npm run migrate مرة واحدة قبل أول تشغيل.
+/**
+ * __PROJECT_NAME__: متجر مبني على إطار maa.
+ *
+ * optionsFromConfig تحوّل إعدادات .env (المفحوصة عند الإقلاع) إلى خيارات التطبيق، وأنت تضيف فوقها
+ * ما يخص متجرك: الإضافات، وجدول الصلاحيات، وحدود المحاولات...
+ */
 async function main() {
   const config = loadConfig();
-  const logger = new Logger(config.logLevel);
   const app = createCommerceApp({
-    databaseUrl: config.databaseUrl,
-    ownerApiKey: config.ownerApiKey,
-    authTokenSecret: config.authTokenSecret,
-    corsOrigin: config.corsOrigin,
-    trustProxy: config.trustProxy,
-    logger,
-    // الإضافات: طرق الدفع والشحن التي تظهر عند إتمام الشراء.
-    // المبالغ بأصغر وحدة للعملة (1 دينار = 1000 درهم).
+    ...optionsFromConfig(config),
     plugins: [
       cashOnDelivery(),
       flatRateShipping({ rate: 10000, freeOver: 200000 }), // 10 دنانير، ومجاني فوق 200 دينار
+      coupons(),
     ],
   });
   await app.listen(config.port);
-  logger.info(`__PROJECT_NAME__ listening on port ${config.port}`);
+  // Ctrl+C أو SIGTERM (Docker): الطلبات الجارية تكتمل، ثم يُغلق كل شيء بترتيب.
+  installShutdownHandlers(app, { timeoutMs: config.shutdownTimeoutMs });
+  app.logger.info(`__PROJECT_NAME__ listening on port ${config.port}`);
 }
 
 main().catch((err) => {
-  console.error(err);
+  console.error(err instanceof Error ? err.message : err);
   process.exitCode = 1;
 });

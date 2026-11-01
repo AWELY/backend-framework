@@ -1,24 +1,22 @@
-// صفحة إتمام الطلب (checkout.html)، وهي الأعقد في الموقع:
-//   - بيانات المستلم (الاسم والهاتف)، وتُملأ من الحساب إن كان الزبون مسجلاً.
-//   - طريقة الاستلام والمدينة والعنوان، وسعر التوصيل يُحدَّث فوراً من الخادم.
-//   - طريقة الدفع.
-//   - إرسال الطلب، ثم صفحة نجاح فيها رقم الطلب ورابط تتبعه.
-// طرق الشحن والدفع والمدن لا تُكتب هنا: تأتي من GET /checkout/options، أي من الإضافات
-// المثبتة في الـ API. إضافة طريقة جديدة في الخادم تظهر هنا تلقائياً، دون تعديل هذا الملف.
-import { api, getExistingCart, ApiError } from "../api.js";
+import { api, getExistingCart, ApiError, newKey } from "../api.js";
 import { getToken, setCartId } from "../store.js";
 import { mountLayout, esc, money, errorText, refreshCartBadge, icon } from "../ui.js";
 
+/**
+ * إتمام الطلب: بيانات المستلم، وطريقة الاستلام، والمدينة، والكوبون، وطريقة الدفع.
+ *
+ * ما تستخدمه من الإطار:
+ *   - GET /checkout/options: طرق الشحن والدفع من الإضافات، وهل المتجر يقبل كوبونات.
+ *   - POST /checkout/quote: التسعير مع الشحن والكوبون والضريبة، دون إنشاء طلب (يتحدث مع كل تغيير).
+ *   - POST /orders مع Idempotency-Key: المفتاح يتولد مرة لكل محاولة شراء، ويُعاد مع كل إعادة إرسال.
+ *     إن انقطعت الشبكة بعد إنشاء الطلب وضغط المشتري "تأكيد" مرة ثانية، يعود الطلب نفسه لا طلب مكرر.
+ *   - الدفع بالبطاقة: الرد يحمل payment.redirectUrl، فننقل المشتري إلى صفحة الدفع.
+ */
 mountLayout("checkout");
 const app = document.getElementById("app");
 
-// نفس قاعدة الـ API (PHONE في customers.schema.ts). نفحص هنا أولاً لرد فوري للمشتري،
-// لكن الخادم يفحص مرة أخرى دائماً: فحص المتصفح للراحة، وفحص الخادم للأمان.
 const PHONE = /^\+?[0-9][0-9 ()-]{5,29}$/;
-// العنوان الذي يُرسل مع الطلب عند الاستلام من المحل (الحقل إلزامي في الـ API).
 const PICKUP_ADDRESS = "استلام من المحل - تاجوراء";
-// المسار /checkout/quote يحتاج عنواناً، لكنه يسعّر حسب المدينة فقط. هذا العنوان المؤقت
-// يُستخدم للتسعير حتى يكتب المشتري عنوانه الحقيقي.
 const QUOTE_ADDRESS = "لحساب سعر التوصيل";
 
 async function load() {
@@ -27,23 +25,21 @@ async function load() {
     app.innerHTML = `<div class="panel empty"><div class="big">سلتك فارغة</div><a class="btn" href="index.html">تسوّق الآن</a></div>`;
     return;
   }
-  // في السلة منتج لم يعد متوفراً: نرجع إلى صفحة السلة، حيث تظهر رسالة الحذف.
   if (cart.items.some((i) => !i.available)) {
     location.href = "cart.html";
     return;
   }
 
-  // طلبان متوازيان: خيارات الشراء من الإضافات، وبيانات الزبون إن كان مسجلاً
-  // (توكن منتهٍ لا يوقف الصفحة: catch ترجع null، فيكمل كضيف).
   const [options, me] = await Promise.all([
     api("/checkout/options"),
     getToken() ? api("/customers/me").catch(() => null) : Promise.resolve(null),
   ]);
   const methods = options.shippingMethods;
   const payments = options.paymentMethods;
+  // مفتاح واحد لهذه المحاولة، يبقى حتى ينجح الطلب (أو يتغير محتواه).
+  let idempotencyKey = newKey();
+  let appliedCoupon = "";
 
-  // novalidate: نعطّل فحص المتصفح التلقائي، لنعرض رسائلنا العربية بأسلوب موحد.
-  // أول طريقة شحن وأول طريقة دفع مختارتان مسبقاً (i === 0).
   app.innerHTML = `
     <h1 class="page-title">إتمام الطلب</h1>
     <div class="layout-2">
@@ -69,6 +65,14 @@ async function load() {
             <textarea id="address" name="shippingAddress" rows="2" placeholder="المنطقة، الشارع، أقرب معلم"></textarea><div class="error"></div></div>
         </div>
 
+        ${options.couponsEnabled ? `
+        <h3>كوبون الخصم</h3>
+        <div class="field coupon-row" data-coupon-field>
+          <input name="couponCode" class="ltr" placeholder="مثال: WELCOME10" autocomplete="off" aria-label="كوبون الخصم">
+          <button type="button" class="btn btn-light" data-apply-coupon>تطبيق</button>
+          <div class="error"></div>
+        </div>` : ""}
+
         <h3>طريقة الدفع</h3>
         <div class="options">
           ${payments.map((p, i) => `
@@ -79,8 +83,9 @@ async function load() {
 
       <aside class="panel summary">
         <h3>طلبك</h3>
-        ${cart.items.map((i) => `<div class="line"><span>${esc(i.name)} × ${i.quantity}</span><span>${money(i.lineTotal)}</span></div>`).join("")}
+        ${cart.items.map((i) => `<div class="line"><span>${esc(i.name)}${i.variantTitle ? ` (${esc(i.variantTitle)})` : ""} × ${i.quantity}</span><span>${money(i.lineTotal)}</span></div>`).join("")}
         <div class="line"><span>المجموع</span><span>${money(cart.total)}</span></div>
+        <div data-adjustments></div>
         <div class="line"><span>التوصيل</span><span data-shipping>—</span></div>
         <div class="line total"><span>الإجمالي</span><span data-total>${money(cart.total)}</span></div>
       </aside>
@@ -90,35 +95,24 @@ async function load() {
   const citySelect = form.querySelector("#city");
   const cityField = form.querySelector("[data-city-field]");
   const delivery = form.querySelector("[data-delivery]");
-  // طريقة الشحن المختارة الآن. form.shippingMethod.value قيمة زر الاختيار المحدد.
   const selectedMethod = () => methods.find((m) => m.id === form.shippingMethod.value);
-  // المدينة المختارة محفوظة بعيداً عن القائمة المنسدلة: التبديل إلى "الاستلام من المحل" ثم
-  // العودة يعيد بناء القائمة، ويجب ألا يضيع اختيار المشتري (خطأ سابق في جدول 6.5).
   let chosenCity = "";
 
-  /**
-   * عند تغيير طريقة الاستلام: الاستلام من المحل يخفي المدينة والعنوان، والطريقة التي لها قائمة
-   * مدن تظهر القائمة مبنية من الخادم (مع إعادة اختيار المدينة المحفوظة)، ثم نعيد التسعير.
-   */
   function syncMethod() {
     const method = selectedMethod();
-    const isPickup = method?.id === "pickup";
-    delivery.classList.toggle("hidden", isPickup);
+    delivery.classList.toggle("hidden", method?.id === "pickup");
     cityField.classList.toggle("hidden", !method?.cities);
     citySelect.innerHTML = `<option value="">اختر المدينة</option>` +
       (method?.cities ?? []).map((c) => `<option ${c === chosenCity ? "selected" : ""}>${esc(c)}</option>`).join("");
     updateQuote();
   }
 
-  /**
-   * يسأل الخادم عن سعر التوصيل والإجمالي، ويعرضهما في الملخص.
-   * السعر يُحسب في الخادم (إضافة الشحن)، لا في المتصفح: الموقع يعرض فقط.
-   * طريقة تحتاج مدينة ولم تُختر بعد: نطلب اختيارها بدل إرسال طلب سيُرفض.
-   */
-  async function updateQuote() {
+  /** يسعّر السلة بالخيارات الحالية. couponCheck: هل نعرض خطأ الكوبون تحت حقله. */
+  async function updateQuote(couponCheck = false) {
     const method = selectedMethod();
     const shippingEl = app.querySelector("[data-shipping]");
     const totalEl = app.querySelector("[data-total]");
+    const adjustmentsEl = app.querySelector("[data-adjustments]");
     if (method?.cities && !citySelect.value) {
       shippingEl.textContent = "اختر المدينة";
       totalEl.textContent = money(cart.total);
@@ -131,39 +125,44 @@ async function load() {
           cartId: cart.id,
           shippingAddress: QUOTE_ADDRESS,
           shippingMethod: method?.id,
-          // نرسل المدينة فقط لطريقة تسعّر حسب المدينة. "...شرط ? {...} : {}" تضيف الحقل أو لا شيء.
           ...(method?.cities ? { shippingCity: citySelect.value } : {}),
+          ...(appliedCoupon ? { couponCode: appliedCoupon } : {}),
         },
       });
       shippingEl.textContent = quote.shippingCost === 0 ? "مجاناً" : money(quote.shippingCost);
+      adjustmentsEl.innerHTML = quote.adjustments
+        .map((a) => `<div class="line adjustment ${esc(a.type)}"><span>${esc(a.type === "discount" ? `خصم ${a.code.replace(/^COUPON:/, "")}` : a.label)}</span><span>${a.type === "discount" ? "−" : "+"}${money(a.amount)}</span></div>`)
+        .join("");
       totalEl.textContent = money(quote.total);
+      if (couponCheck) setFieldError("couponCode", null, appliedCoupon ? "تم تطبيق الكوبون" : null);
     } catch (err) {
+      if (err instanceof ApiError && err.code === "INVALID_COUPON") {
+        setFieldError("couponCode", errorText(err));
+        appliedCoupon = "";
+        return updateQuote();
+      }
       shippingEl.textContent = "—";
       showFormError(errorText(err));
     }
   }
 
-  /** رسالة خطأ عامة أعلى النموذج، أو مسحها بـ null. */
   function showFormError(message) {
     app.querySelector("[data-form-error]").innerHTML = message ? `<div class="alert error">${esc(message)}</div>` : "";
   }
 
-  /** رسالة خطأ تحت حقل واحد بالاسم (مثل "contactPhone")، أو مسحها بـ null. */
-  function setFieldError(name, message) {
+  /** يعرض خطأ (أو نجاحاً) تحت حقل. */
+  function setFieldError(name, message, success = null) {
     const input = form.elements.namedItem(name);
-    // مجموعة أزرار الاختيار (radio) ترجع كـ RadioNodeList لا كعنصر واحد، وليس لها مكان
-    // لرسالة الخطأ، فنتجاوزها. (خطأ سابق في جدول 6.5: كان الكود ينهار هنا.)
     if (!(input instanceof Element)) return;
     const field = input.closest(".field");
     if (!field) return;
     field.classList.toggle("invalid", Boolean(message));
-    field.querySelector(".error").textContent = message ?? "";
+    field.classList.toggle("valid", Boolean(success));
+    field.querySelector(".error").textContent = message ?? success ?? "";
   }
 
-  /** يفحص الحقول قبل الإرسال، ويعرض رسالة تحت كل حقل خاطئ. يرجع true إن كان كل شيء صحيحاً. */
   function validate() {
     const method = selectedMethod();
-    // لكل حقل: null إن كان صحيحاً، أو رسالة الخطأ.
     const errors = {
       contactName: form.contactName.value.trim() ? null : "الاسم مطلوب",
       contactPhone: PHONE.test(form.contactPhone.value.trim()) ? null : "أدخل رقم هاتف صحيح، مثال: 0912345678",
@@ -175,33 +174,37 @@ async function load() {
     return Object.values(errors).every((e) => e === null);
   }
 
-  // رسالة خطأ الحقل تختفي بمجرد أن يعدّل المشتري ذلك الحقل.
-  form.addEventListener("input", (e) => setFieldError(e.target.name, null));
-
-  // تغيير طريقة الاستلام يعيد بناء الحقول، وتغيير المدينة يحفظها ويعيد التسعير.
+  form.addEventListener("input", (e) => {
+    setFieldError(e.target.name, null);
+    // تغيّر محتوى الطلب: مفتاح جديد (المفتاح القديم مع جسم مختلف يرفضه الخادم IDEMPOTENCY_KEY_REUSED).
+    idempotencyKey = newKey();
+  });
   form.addEventListener("change", (e) => {
     setFieldError(e.target.name, null);
+    idempotencyKey = newKey();
     if (e.target.name === "shippingMethod") syncMethod();
     if (e.target.name === "shippingCity") {
       chosenCity = citySelect.value;
       updateQuote();
     }
   });
+  form.querySelector("[data-apply-coupon]")?.addEventListener("click", () => {
+    appliedCoupon = form.couponCode.value.trim().toUpperCase();
+    updateQuote(true);
+  });
 
-  // إرسال الطلب.
   form.addEventListener("submit", async (e) => {
-    // preventDefault: نمنع المتصفح من إرسال النموذج وإعادة تحميل الصفحة، ونرسله نحن بـ fetch.
     e.preventDefault();
     showFormError(null);
     if (!validate()) return;
     const method = selectedMethod();
     const submit = form.querySelector("[data-submit]");
-    // تعطيل الزر أثناء الإرسال: الضغط المزدوج لا يرسل طلبين (والخادم يرفض الثاني بـ 409 على أي حال).
     submit.disabled = true;
     submit.textContent = "جاري إرسال الطلب...";
     try {
       const order = await api("/orders", {
         method: "POST",
+        idempotencyKey,
         body: {
           cartId: cart.id,
           contactName: form.contactName.value.trim(),
@@ -210,16 +213,19 @@ async function load() {
           ...(method.cities ? { shippingCity: citySelect.value } : {}),
           shippingMethod: method.id,
           paymentMethod: form.paymentMethod.value,
+          ...(appliedCoupon ? { couponCode: appliedCoupon } : {}),
         },
       });
-      // السلة صارت طلباً: ننسى رقمها، فالإضافة التالية تنشئ سلة جديدة.
       setCartId(null);
       refreshCartBadge();
+      if (order.payment?.redirectUrl) {
+        location.href = order.payment.redirectUrl;
+        return;
+      }
       showSuccess(order);
     } catch (err) {
       submit.disabled = false;
       submit.textContent = "تأكيد الطلب";
-      // الخادم رفض حقولاً (400): نعرض رسالة كل حقل تحته.
       if (err instanceof ApiError && Array.isArray(err.details)) {
         for (const d of err.details) setFieldError(d.field, errorText({ status: 400, details: [d] }));
       }
@@ -228,14 +234,9 @@ async function load() {
     }
   });
 
-  // أول تشغيل: نبني حقول طريقة الاستلام المختارة مسبقاً، ونسعّر.
   syncMethod();
 }
 
-/**
- * صفحة النجاح: رقم الطلب، والإجمالي، وتعليمات الدفع من الإضافة، ورابط تتبع جاهز.
- * رابط التتبع يحمل رقم الطلب والهاتف معاً، لأن الضيف يحتاجهما لرؤية طلبه.
- */
 function showSuccess(order) {
   const trackUrl = `track.html?id=${encodeURIComponent(order.id)}&phone=${encodeURIComponent(order.contactPhone)}`;
   app.innerHTML = `

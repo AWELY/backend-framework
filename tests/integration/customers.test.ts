@@ -53,7 +53,10 @@ test("login: right password works; wrong password and unknown email give the SAM
   const noUser = await api(t.base, "POST", "/customers/login", { body: { email: "nobody@example.com", password: "nope-nope" } });
   assert.equal(wrongPw.status, 401);
   assert.equal(noUser.status, 401);
-  assert.deepEqual(wrongPw.body, noUser.body);
+  // نفس الرد بالضبط، ما عدا requestId (رقم كل طلب مختلف بطبيعته).
+  const withoutRequestId = (body: { error: Record<string, unknown> }) => ({ ...body.error, requestId: undefined });
+  assert.deepEqual(withoutRequestId(wrongPw.body), withoutRequestId(noUser.body));
+  assert.equal(wrongPw.body.error.code, "INVALID_CREDENTIALS");
 });
 
 // /customers/me: بلا توكن 401، وتوكن معدّل (حرف زائد) 401، وبالتوكن الصحيح يرى ملفه.

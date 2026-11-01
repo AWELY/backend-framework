@@ -1,0 +1,45 @@
+# تشغيل كامل محلياً: PostgreSQL، ثم migrate مرة واحدة، ثم الـ API.
+#   OWNER_API_KEY=$(openssl rand -hex 32) AUTH_TOKEN_SECRET=$(openssl rand -hex 32) docker compose up --build
+# ثم: curl http://localhost:3000/readyz
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: maa
+      POSTGRES_PASSWORD: maa
+      POSTGRES_DB: maa
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maa"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  migrate:
+    build: .
+    command: ["node", "dist/migrate.js"]
+    environment:
+      DATABASE_URL: postgresql://maa:maa@db:5432/maa
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: .
+    environment:
+      PORT: "3000"
+      DATABASE_URL: postgresql://maa:maa@db:5432/maa
+      OWNER_API_KEY: ${OWNER_API_KEY:?set OWNER_API_KEY to 32+ random characters}
+      AUTH_TOKEN_SECRET: ${AUTH_TOKEN_SECRET:?set AUTH_TOKEN_SECRET to 32+ random characters}
+      LOG_FORMAT: json
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    ports:
+      - "3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    stop_grace_period: 15s
+
+volumes:
+  pgdata:

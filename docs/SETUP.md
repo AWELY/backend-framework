@@ -76,7 +76,7 @@ PASS  build (TypeScript)
 PASS  unit + integration tests
 PASS  CLI: create a store, install, migrate, start, call it
 PASS  demo store: migrate, seed, start, 16-step scenario
-PASS  AMA storefront: API + website
+PASS  Maa Store: API + website (shop, courier, admin)
 ALL CHECKS PASSED
 ```
 
@@ -103,4 +103,4 @@ curl.exe http://localhost:3000/health
 | `Cannot reach the test database` | خدمة PostgreSQL متوقفة: `Start-Service postgresql-x64-17` (أو من تطبيق Services) |
 | `OWNER_API_KEY must be a random value of at least 32 characters` | ملف `.env` فيه القيم الافتراضية. احذفه ونفّذ `npm run setup` من جديد |
 | `.env already exists` | `npm run setup` لا يكتب فوق ملف موجود. احذف `.env` إن أردت إعادة إنشائه |
-| `Registration limit reached` في رحلة الشراء التجريبية | الحد 5 حسابات في الساعة لكل عنوان. أعد تشغيل خادم المتجر التجريبي |
+| `Registration limit reached` في رحلة الشراء التجريبية | الحد 5 حسابات في الساعة لكل عنوان، والعدّاد محفوظ في PostgreSQL (لا تصفّره إعادة التشغيل). انتظر ساعة، أو امسح القاعدة وأعد migrate و seed |

@@ -1,48 +1,57 @@
-// الاتصال بالـ API: كل صفحات الموقع تمر من هنا. الموقع لا يعرف شيئاً عن قاعدة البيانات،
-// بل يرسل طلبات HTTP فقط، كأي عميل آخر (Headless).
 import { API_BASE } from "./config.js";
-import { getToken, clearSession, getCartId, setCartId } from "./store.js";
+import { getToken, clearSession, getCartId, setCartId, getStaffToken, getOwnerKey } from "./store.js";
 
 /**
- * خطأ من الـ API، يحمل رمز الحالة ورسالة الخطأ وتفاصيله.
- * status = 0 يعني أن الـ API لم يُصَل إليه أصلاً (الخادم متوقف، أو لا اتصال بالشبكة).
+ * خطأ من الـ API. code هو الرمز الثابت من الإطار (مثل "INSUFFICIENT_STOCK")، والواجهة تقرر به،
+ * لا بنص الرسالة. status = 0 يعني أن الـ API لم يُصَل إليه أصلاً (الخادم متوقف، أو لا اتصال).
+ * requestId يظهر في رسالة الخطأ للزبون، فيذكره لخدمة العملاء ويُعثر على الطلب في سجل الخادم.
  */
 export class ApiError extends Error {
-  constructor(status, message, details) {
+  constructor(status, message, details, code = null, requestId = null) {
     super(message);
     this.status = status;
     this.details = details;
+    this.code = code;
+    this.requestId = requestId;
   }
 }
 
+/** ترويسات المصادقة حسب من يستدعي: الزبون، أو الموظف (أو المالك بمفتاحه)، أو لا أحد. */
+function authHeaders(auth) {
+  if (auth === "customer") {
+    const token = getToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+  if (auth === "staff") {
+    const owner = getOwnerKey();
+    if (owner) return { "X-Api-Key": owner };
+    const token = getStaffToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+  return {};
+}
+
 /**
- * يستدعي الـ API الخاص بالمتجر، ويرسل توكن دخول الزبون إن وُجد.
+ * يستدعي الـ API. يرجع { data, headers }.
+ *   auth: "customer" (الافتراضي) | "staff" | "none"
+ *   idempotencyKey: يرسل Idempotency-Key (الشراء والاسترجاع: الإعادة لا تكرر العملية)
+ *   ifMatch: يرسل If-Match (التعديل المتفائل: 412 إن عدّل غيرك قبلك)
  *
- * إن انتهت صلاحية التوكن (401)، تُمسح الجلسة ويُعاد الطلب مرة واحدة كضيف. هكذا لا يكسر
- * دخول قديم منتهٍ الصفحات العامة: يرى الزائر المنتجات بدل رسالة خطأ.
- *
- * مثال: await api("/products") ترجع قائمة المنتجات،
- *       و await api("/carts", { method: "POST" }) تنشئ سلة.
+ * توكن زبون منتهٍ أو ملغى (INVALID_TOKEN): تُمسح الجلسة ويُعاد الطلب مرة واحدة كضيف، فلا يكسر
+ * دخول قديم الصفحات العامة.
  */
-export async function api(path, { method = "GET", body, retried = false } = {}) {
-  const headers = {};
+export async function request(path, { method = "GET", body, auth = "customer", idempotencyKey, ifMatch, retried = false } = {}) {
+  const headers = { ...authHeaders(auth) };
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
+  if (ifMatch) headers["If-Match"] = ifMatch;
 
   let res;
   try {
-    res = await fetch(API_BASE + path, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    res = await fetch(API_BASE + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   } catch {
-    // لا رد أصلاً (فشل الشبكة): الرمز 0، والصفحة تعرض "تعذر الاتصال بالخادم".
-    throw new ApiError(0, "network", null);
+    throw new ApiError(0, "network", null, "NETWORK");
   }
-
-  // نقرأ الجسم نصاً أولاً، ثم نحاول تحويله من JSON، فلا ينهار الكود إن لم يكن JSON.
   const text = await res.text();
   let data = null;
   try {
@@ -50,60 +59,80 @@ export async function api(path, { method = "GET", body, retried = false } = {}) 
   } catch {
     data = null;
   }
-
   if (!res.ok) {
-    // توكن منتهٍ أو غير صالح: نمسح الجلسة، ونعيد الطلب نفسه مرة واحدة فقط (retried) كضيف.
-    if (res.status === 401 && token && !retried && data?.error?.message === "Invalid or expired token") {
+    const error = data?.error ?? {};
+    if (res.status === 401 && auth === "customer" && headers.Authorization && !retried && error.code === "INVALID_TOKEN") {
       clearSession();
-      return api(path, { method, body, retried: true });
+      return request(path, { method, body, auth, idempotencyKey, ifMatch, retried: true });
     }
-    // الشكل الموحد لأخطاء الـ API: { error: { message, details } }
-    throw new ApiError(res.status, data?.error?.message ?? res.statusText, data?.error?.details ?? null);
+    throw new ApiError(res.status, error.message ?? res.statusText, error.details ?? null, error.code ?? null, error.requestId ?? null);
   }
-  return data;
+  return { data, headers: res.headers };
 }
 
+/** نفس request لكن يرجع البيانات فقط. مثال: await api("/products") */
+export async function api(path, options) {
+  return (await request(path, options)).data;
+}
+
+/** قائمة مع عددها الكلي (من ترويسة X-Total-Count): { items, total }. */
+export async function apiPage(path, options) {
+  const { data, headers } = await request(path, options);
+  return { items: data ?? [], total: Number(headers.get("X-Total-Count") ?? data?.length ?? 0) };
+}
+
+/** مفتاح عشوائي لـ Idempotency-Key. */
+export const newKey = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
 /**
- * سلة الزائر المفتوحة، وتُنشأ عند أول حاجة إليها.
- * السلة المحفوظة في المتصفح إن لم تعد موجودة (404)، أو اشتُريت من قبل، تُستبدل بسلة جديدة.
+ * سلة الزائر المفتوحة، وتُنشأ عند أول حاجة إليها. الزبون الداخل يأخذ سلته المحفوظة في الخادم
+ * (GET /carts/mine) إن لم تكن في المتصفح سلة، فيجد سلته على أي جهاز.
  */
 export async function getOrCreateCart() {
+  const existing = await getExistingCart();
+  if (existing) return existing;
+  const cart = await api("/carts", { method: "POST" });
+  setCartId(cart.id);
+  return cart;
+}
+
+/** السلة المحفوظة دون إنشاء سلة جديدة (null إن لم تكن للزائر سلة بعد). */
+export async function getExistingCart() {
   const id = getCartId();
   if (id) {
     try {
       const cart = await api(`/carts/${id}`);
       if (cart.status === "open") return cart;
     } catch (err) {
-      // 404 فقط يعني "السلة غير موجودة"، فننشئ غيرها. أي خطأ آخر نمرره كما هو.
       if (!(err instanceof ApiError) || err.status !== 404) throw err;
     }
+    setCartId(null);
   }
-  const cart = await api("/carts", { method: "POST" });
-  setCartId(cart.id);
-  return cart;
-}
-
-/**
- * السلة المحفوظة دون إنشاء سلة جديدة (null إن لم تكن للزائر سلة بعد).
- * تستخدمها الصفحات التي تعرض العدد في أيقونة السلة فقط، فلا تنشئ سلة لكل زائر.
- */
-export async function getExistingCart() {
-  const id = getCartId();
-  if (!id) return null;
-  try {
-    const cart = await api(`/carts/${id}`);
-    return cart.status === "open" ? cart : null;
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 404) {
-      setCartId(null);
-      return null;
+  if (getToken()) {
+    // 204 (لا سلة مفتوحة) يصل هنا null.
+    const mine = await api("/carts/mine");
+    if (mine) {
+      setCartId(mine.id);
+      return mine;
     }
-    throw err;
   }
+  return null;
 }
 
-/** يضيف منتجاً إلى السلة (ينشئ السلة إن لزم)، ويرجع السلة بعد الإضافة. */
-export async function addToCart(productId, quantity) {
+/** يضيف منتجاً (أو شكلاً منه) إلى السلة، ويرجع السلة بعد الإضافة. */
+export async function addToCart(productId, quantity, variantId) {
   const cart = await getOrCreateCart();
-  return api(`/carts/${cart.id}/items`, { method: "POST", body: { productId, quantity } });
+  return api(`/carts/${cart.id}/items`, { method: "POST", body: { productId, quantity, ...(variantId ? { variantId } : {}) } });
+}
+
+/** مسار سطر في السلة، مع الشكل إن وُجد. */
+export function linePath(cartId, productId, variantId) {
+  return `/carts/${cartId}/items/${encodeURIComponent(productId)}${variantId ? `?variantId=${encodeURIComponent(variantId)}` : ""}`;
+}
+
+/** تسجيل خروج الزبون: يُلغي الجلسة في الخادم، ثم يمسحها من المتصفح. */
+export async function logoutCustomer({ everywhere = false } = {}) {
+  await api(everywhere ? "/customers/logout-all" : "/customers/logout", { method: "POST" }).catch(() => undefined);
+  clearSession();
+  setCartId(null);
 }

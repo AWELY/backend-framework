@@ -109,8 +109,8 @@ function createProject(projectName) {
 const program = new Command();
 
 program
-  .name("commerce-cli")
-  .description("Scaffolding tool for the commerce framework")
+  .name("maa")
+  .description("Scaffolding tool for the Maa commerce framework")
   .version(version);
 
 // الأمر create، ومعامل إلزامي واحد هو اسم المشروع (<...> تعني إلزامي).

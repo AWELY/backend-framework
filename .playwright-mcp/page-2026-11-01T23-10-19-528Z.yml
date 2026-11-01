@@ -1,0 +1,14 @@
+- main [ref=f6e2]:
+  - generic [ref=f6e3]:
+    - img "متجر ماء" [ref=f6e5]
+    - heading "لوحة الإدارة" [level=1] [ref=f6e6]
+    - generic [ref=f6e7]:
+      - generic [ref=f6e8]:
+        - generic [ref=f6e9]: البريد الإلكتروني
+        - textbox "البريد الإلكتروني" [ref=f6e10]
+      - generic [ref=f6e11]:
+        - generic [ref=f6e12]: كلمة المرور
+        - textbox "كلمة المرور" [ref=f6e13]
+      - button "دخول" [ref=f6e14] [cursor=pointer]
+    - group [ref=f6e15]:
+      - generic "الدخول بمفتاح المالك" [ref=f6e16]

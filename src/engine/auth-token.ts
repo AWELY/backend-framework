@@ -3,28 +3,36 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 /**
  * توكنات دخول موقّعة ولها مدة صلاحية (HMAC-SHA256).
  *
- * نفس فكرة JWT، لكن بخوارزمية واحدة ثابتة ودون مكتبة. الخادم لا يحفظ جدول جلسات:
+ * نفس فكرة JWT، لكن بخوارزمية واحدة ثابتة ودون مكتبة:
  *   - التوقيع يثبت أن الخادم هو من أصدر التوكن، فلا يستطيع أحد تزويره دون معرفة السر.
  *   - الحقل exp يحدد متى تنتهي صلاحيته.
  *
  * الشكل:  base64url(JSON المحتوى) + "." + base64url(توقيع الجزء الأول)
  * مثال:   eyJzdWIiOiI...In0.Xk3v9...
  *
- * قيد معروف لهذا النوع (Stateless): لا يمكن إلغاء التوكن قبل انتهاء مدته، فتسجيل الخروج
- * يعني أن يحذفه العميل من عنده. المدة القصيرة (7 أيام افتراضياً، في src/app.ts) تقلل الخطر.
+ * الإلغاء: التوكن يحمل رقم جلسة (sid) محفوظة في جدول auth_sessions (src/runtime/sessions.ts).
+ * المصادقة تتأكد مع كل طلب أن الجلسة ما زالت سارية، فتسجيل الخروج، أو تغيير كلمة المرور، أو
+ * إيقاف حساب موظف، يلغي التوكن فوراً، لا بعد انتهاء مدته. القرار في docs/adr/0006-server-side-sessions.md.
+ *
+ * تغيير السر (Rotation): verifyToken يقبل عدة أسرار. الأول يوقّع التوكنات الجديدة، والباقي أسرار
+ * قديمة ما زالت تُقبل، فلا يخرج كل الزبائن لحظة تغيير السر.
  *
  * ملاحظة: المحتوى ليس مشفّراً، بل مرمّز فقط. أي شخص يستطيع قراءته، لكن لا يستطيع تعديله.
- * لهذا لا نضع فيه إلا رقم الزبون ودوره.
+ * لهذا لا نضع فيه إلا الأرقام والدور.
  */
 
 /** محتوى التوكن. */
 export interface TokenPayload {
-  /** Subject: رقم الزبون (id). */
+  /** Subject: رقم الزبون أو الموظف (id). */
   sub: string;
-  /** الدور، مثل "customer". */
+  /** الدور وقت الإصدار، مثل "customer". للموظف يُقرأ الدور الحالي من القاعدة عند كل طلب. */
   role: string;
   /** وقت الانتهاء، بالثواني منذ 1970 (Unix epoch). */
   exp: number;
+  /** رقم الجلسة في auth_sessions. */
+  sid?: string;
+  /** نوع صاحب التوكن (Principal type). */
+  pt?: "customer" | "staff";
 }
 
 /** يحسب توقيع HMAC-SHA256 لنص بالسر. نفس النص ونفس السر يعطيان دائماً نفس التوقيع. */
@@ -33,50 +41,51 @@ function sign(body: string, secret: string): Buffer {
 }
 
 /**
- * يصدر توكناً جديداً. يستدعيها createCommerceApp داخل issueCustomerToken بعد التسجيل أو الدخول.
+ * يصدر توكناً جديداً. يستدعيها createCommerceApp عند إنشاء جلسة دخول.
  * now معامل اختياري للاختبارات فقط: يسمح بتجربة "توكن منتهي" دون انتظار أيام.
  */
 export function signToken(
-  claims: { sub: string; role: string },
+  claims: { sub: string; role: string; sid?: string; pt?: "customer" | "staff" },
   secret: string,
   ttlSeconds: number,
   now: number = Date.now()
 ): string {
-  // Date.now() بالملي ثانية، و exp بالثواني، لذلك نقسم على 1000.
   const payload: TokenPayload = { ...claims, exp: Math.floor(now / 1000) + ttlSeconds };
-  // base64url: مثل base64 لكن بلا رموز "+" و "/" و "=" التي تفسد الروابط والترويسات.
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
   return `${body}.${sign(body, secret).toString("base64url")}`;
 }
 
 /**
- * يتحقق من التوكن. يرجع المحتوى إن كان التوقيع صحيحاً والمدة لم تنتهِ، وإلا null.
+ * يتحقق من التوكن. يرجع المحتوى إن كان التوقيع صحيحاً (بأي سر من secret) والمدة لم تنتهِ، وإلا null.
  * يستدعيها middleware/auth.ts مع كل طلب فيه "Authorization: Bearer <token>".
  */
-export function verifyToken(token: string, secret: string, now: number = Date.now()): TokenPayload | null {
-  // التوكن جزءان بالضبط تفصلهما نقطة. أي شكل آخر مرفوض.
+export function verifyToken(
+  token: string,
+  secret: string | readonly string[],
+  now: number = Date.now()
+): TokenPayload | null {
   const [body, signature, ...rest] = token.split(".");
   if (!body || !signature || rest.length > 0) return null;
 
-  // نعيد حساب التوقيع بأنفسنا ونقارنه بالتوقيع المرسل. إن عدّل أحد حرفاً واحداً
-  // في المحتوى (مثلاً غيّر role إلى "owner")، يختلف التوقيع فيُرفض التوكن.
-  const expected = sign(body, secret);
   const given = Buffer.from(signature, "base64url");
-  // timingSafeEqual: مقارنة بزمن ثابت، فلا يكشف زمن الرد كم حرفاً تطابق من التوقيع.
-  // (تشترط طولين متساويين، لذلك نفحص الطول أولاً.)
-  if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
+  const secrets = typeof secret === "string" ? [secret] : secret;
+  const valid = secrets.some((s) => {
+    const expected = sign(body, s);
+    return given.length === expected.length && timingSafeEqual(given, expected);
+  });
+  if (!valid) return null;
 
-  // التوقيع صحيح: نقرأ المحتوى.
   let payload: unknown;
   try {
     payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
   } catch {
     return null;
   }
-  // نتأكد من شكل المحتوى قبل الوثوق به.
   const p = payload as Partial<TokenPayload>;
   if (typeof p.sub !== "string" || typeof p.role !== "string" || typeof p.exp !== "number") return null;
-  // انتهت المدة؟ (exp بالثواني، و now بالملي ثانية)
   if (p.exp * 1000 <= now) return null;
-  return { sub: p.sub, role: p.role, exp: p.exp };
+  const result: TokenPayload = { sub: p.sub, role: p.role, exp: p.exp };
+  if (typeof p.sid === "string") result.sid = p.sid;
+  if (p.pt === "customer" || p.pt === "staff") result.pt = p.pt;
+  return result;
 }

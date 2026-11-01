@@ -21,9 +21,18 @@ export type RolePermissions = Record<string, readonly Permission[]>;
 
 /**
  * السياسة الافتراضية لمتجر صغير. يستطيع المتجر تمرير جدول خاص به بدلها
- * (الخيار accessControl في createCommerceApp).
+ * (الخيار accessControl في createCommerceApp)، مثلاً { ...DEFAULT_ROLES, admin: [...] }.
  *
- * المالك: كل شيء.
+ * المالك (بمفتاح X-Api-Key): كل شيء، ومنه وحده إدارة الموظفين (staff:write).
+ *
+ * الموظفون (حسابات بالبريد وكلمة المرور، src/modules/staff):
+ *   admin    : الكتالوج والمخزون والطلبات كلها (ومنها الاسترجاع والإسناد)، وقراءة الزبائن
+ *              والموظفين وسجل التدقيق. لا يستطيع إنشاء موظفين: هذا يمنع مديراً من صنع حساب
+ *              بصلاحيات أعلى منه (Privilege escalation).
+ *   manager  : الكتالوج والمخزون، وإدارة الطلبات وإسنادها للمندوبين، دون الاسترجاع.
+ *   support  : قراءة الطلبات وتغيير حالتها ودفعها، وقراءة الزبائن.
+ *   courier  : المندوب: يرى الطلبات المسندة إليه فقط، ويسجّل الاستلام والتسليم والتحصيل.
+ *
  * الزبون:
  *   products:read    : قراءة المنتجات
  *   categories:read  : قراءة الأقسام
@@ -34,6 +43,31 @@ export type RolePermissions = Record<string, readonly Permission[]>;
  */
 export const DEFAULT_ROLES: RolePermissions = {
   owner: ["*"],
+  admin: [
+    "products:*",
+    "categories:*",
+    "inventory:*",
+    "orders:*",
+    "deliveries:*",
+    "coupons:*",
+    "customers:read",
+    "staff:read",
+    "audit:read",
+  ],
+  manager: [
+    "products:*",
+    "categories:*",
+    "inventory:*",
+    "orders:read-all",
+    "orders:write",
+    "orders:assign",
+    "deliveries:read-all",
+    "coupons:read",
+    "customers:read",
+    "staff:read",
+  ],
+  support: ["products:read", "categories:read", "orders:read-all", "orders:write", "deliveries:read-all", "customers:read"],
+  courier: ["deliveries:read-own", "deliveries:update-own"],
   customer: [
     "products:read",
     "categories:read",
@@ -43,6 +77,9 @@ export const DEFAULT_ROLES: RolePermissions = {
     "profile:manage",
   ],
 };
+
+/** أدوار لا تُعطى لحساب موظف: المالك له مفتاحه، والزبون له تسجيله. */
+const NON_STAFF_ROLES = new Set(["owner", "customer"]);
 
 export class AccessControl {
   constructor(private readonly roles: RolePermissions = DEFAULT_ROLES) {}
@@ -61,7 +98,8 @@ export class AccessControl {
   can(role: string | undefined, permission: Permission): boolean {
     // لا دور (ضيف لم يسجل دخوله): لا صلاحيات.
     if (!role) return false;
-    const granted = this.roles[role];
+    // Object.hasOwn: اسم دور مثل "constructor" لا يجب أن يجد خاصية موروثة من Object.
+    const granted = Object.hasOwn(this.roles, role) ? this.roles[role] : undefined;
     // دور غير معروف في الجدول: لا صلاحيات.
     if (!granted) return false;
     // المورد هو الجزء قبل ":"، مثل "products" من "products:write".
@@ -72,6 +110,11 @@ export class AccessControl {
 
   /** هل هذا الدور معرّف في الجدول؟ دالة مساعدة عامة للمتاجر، ولا يستخدمها الإطار نفسه اليوم. */
   hasRole(role: string): boolean {
-    return role in this.roles;
+    return Object.hasOwn(this.roles, role);
+  }
+
+  /** الأدوار التي يمكن إعطاؤها لحساب موظف (كل الأدوار ما عدا owner و customer). */
+  staffRoles(): string[] {
+    return Object.keys(this.roles).filter((r) => !NON_STAFF_ROLES.has(r));
   }
 }
