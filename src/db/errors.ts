@@ -17,14 +17,24 @@ import { AppError, ConflictError, ErrorCodes, ServiceUnavailableError, Validatio
  *   57014 query_canceled          تجاوز statement_timeout           503 QUERY_TIMEOUT
  *   55P03 lock_not_available      قفل مشغول (مع NOWAIT)             503
  *   53300 too_many_connections    القاعدة وصلت حد الاتصالات         503
+ *   08xxx / 57P01-3 / ECONNREFUSED... القاعدة متوقفة أو الاتصال انقطع  503 DATABASE_UNAVAILABLE
  * أي رمز آخر يبقى كما هو، فيصبح 500 ويُسجَّل في سجل الخادم.
  *
  * نص detail الذي يرسله PostgreSQL لا يُمرَّر للعميل عمداً، لأنه قد يعيد قيماً مخزنة
  * (مثل بريد زبون آخر). نرسل فقط اسم القيد (constraint) ليعرف المطوّر أي قاعدة خولفت.
  */
+/** أخطاء الاتصال نفسه (لا خطأ في الاستعلام): القاعدة متوقفة، أو أُعيد تشغيلها، أو الشبكة انقطعت. */
+const CONNECTION_ERROR_CODES = new Set(["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENOTFOUND", "EHOSTUNREACH", "EPIPE", "57P01", "57P02", "57P03"]);
+
 export function translateDbError(err: unknown): unknown {
   if (err instanceof AppError) return err;
-  const { code, constraint } = err as { code?: string; constraint?: string };
+  const { code, constraint, message } = (err ?? {}) as { code?: string; constraint?: string; message?: string };
+  if (
+    (code && (CONNECTION_ERROR_CODES.has(code) || code.startsWith("08"))) ||
+    /timeout exceeded when trying to connect|Connection terminated/i.test(message ?? "")
+  ) {
+    return new ServiceUnavailableError("The database is unavailable, please retry", 5, ErrorCodes.DATABASE_UNAVAILABLE);
+  }
   switch (code) {
     case "23505": // unique_violation
       return new ConflictError("A record with the same unique value already exists", { constraint }, ErrorCodes.DUPLICATE_VALUE);

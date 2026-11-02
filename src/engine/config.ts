@@ -60,6 +60,8 @@ export interface AppConfig {
   metricsToken?: string;
   /** كم ننتظر الطلبات الجارية عند الإيقاف قبل قطعها. */
   shutdownTimeoutMs: number;
+  /** كم ننتظر بعد أن يصبح /readyz 503 وقبل رفض الاتصالات (ليتوقف موازن الأحمال عن الإرسال أولاً). */
+  shutdownDelayMs: number;
   /** ترويسة Strict-Transport-Security (فعّلها فقط خلف HTTPS). */
   hsts: boolean;
 }
@@ -174,6 +176,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       connectionTimeoutMs: integer("DB_CONNECTION_TIMEOUT_MS", 5_000, 0, 600_000),
     },
     shutdownTimeoutMs: integer("SHUTDOWN_TIMEOUT_MS", 10_000, 0, 600_000),
+    shutdownDelayMs: integer("SHUTDOWN_DELAY_MS", 0, 0, 120_000),
     hsts: flag("HSTS", false),
   };
   if (env.METRICS_TOKEN) config.metricsToken = env.METRICS_TOKEN;

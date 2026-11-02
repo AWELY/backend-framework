@@ -115,10 +115,15 @@ export const staffModule: CommerceModule = {
       authenticate,
       withInput({ body: passwordChangeSchema, summary: "Change your password", successStatus: 204 }, async (req, res, { body }) => {
         const id = selfId(req);
+        const key = `staff-password-change:${id}`;
+        const wait = (await limiters.login?.retryAfter(key)) ?? 0;
+        if (wait > 0) throw new TooManyRequestsError("Too many failed attempts. Try again later.", wait);
         const stored = await repo().passwordHashOf(id);
         if (!stored || !(await verifyPassword(body.currentPassword, stored))) {
+          await limiters.login?.recordFailure(key);
           throw new ValidationError("Validation failed", [{ field: "currentPassword", message: "is incorrect" }], ErrorCodes.INVALID_CREDENTIALS);
         }
+        await limiters.login?.reset(key);
         await repo().update(id, { passwordHash: await hashPassword(body.newPassword) });
         await sessions.revokeAll("staff", id, { exceptSessionId: req.auth?.sessionId });
         res.status(204).end();

@@ -51,7 +51,9 @@ export function idempotency(store: IdempotencyStore) {
       ]);
     }
     const actor = req.auth ? `${req.auth.principal ?? req.auth.role}:${req.auth.userId ?? "-"}` : "guest";
-    const scope = `${req.method} ${req.route ?? ""}|${actor}`;
+    // المسار الحقيقي (وفيه رقم الطلب)، لا النمط "/orders/:id/refunds": نفس المفتاح على طلبين مختلفين
+    // عمليتان مختلفتان، ولا يجب أن يعيد الثاني رد الأول.
+    const scope = `${req.method} ${(req.url ?? "").split("?")[0]}|${actor}`;
     const requestHash = createHash("sha256").update(req.rawBody ?? "").digest("hex");
 
     const begun = await store.begin(scope, key, requestHash);

@@ -270,3 +270,17 @@ test("delivery: a failed attempt keeps the order, which can be reassigned and de
   assert.equal(done.body.status, "delivered");
   assert.equal((await api(t.base, "GET", "/deliveries?status=delivered", { token: admin.token })).status, 200);
 });
+
+test("coupons: duplicate code is 409, invalid percent or date is 400, never a 500", async () => {
+  const body = { code: "ONCE5", kind: "percent", value: 5 };
+  assert.equal((await api(t.base, "POST", "/coupons", { owner: true, body })).status, 201);
+  const dup = await api(t.base, "POST", "/coupons", { owner: true, body: { ...body, code: "once5" } });
+  assert.equal(dup.status, 409);
+  assert.equal(dup.body.error.code, "DUPLICATE_VALUE");
+  const tooMuch = await api(t.base, "PATCH", "/coupons/ONCE5", { owner: true, body: { value: 150 } });
+  assert.equal(tooMuch.status, 400);
+  assert.equal(tooMuch.body.error.details[0].field, "value");
+  const badDate = await api(t.base, "POST", "/coupons", { owner: true, body: { code: "BADDATE", kind: "fixed", value: 1000, expiresAt: "2026-13-45T00:00:00Z" } });
+  assert.equal(badDate.status, 400);
+  assert.equal((await api(t.base, "PATCH", "/coupons/NOPE", { owner: true, body: { isActive: false } })).status, 404);
+});

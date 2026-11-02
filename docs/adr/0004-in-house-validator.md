@@ -46,7 +46,7 @@ requirements are specific to this API:
   (`tests/unit/validation-v2.test.ts`).
 - Limited expressiveness: no unions, no custom refinements or transforms, no date type. Cross-field
   rules live in handlers (for example, a percent coupon must be at most 100), and dates are strings
-  checked by a prefix pattern only.
+  matched by a pattern and then parsed by the handler that needs them.
 - We maintain it, and contributors cannot reuse Zod knowledge.
 
 ## Alternatives considered

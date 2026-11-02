@@ -2,7 +2,8 @@ import type { CommercePlugin } from "../modules/types";
 import type { Schema } from "../engine/validation";
 import { withInput } from "../middleware/validate";
 import { requirePermission } from "../middleware/auth";
-import { ErrorCodes, NotFoundError, ValidationError } from "../engine/errors";
+import { ConflictError, ErrorCodes, NotFoundError, ValidationError } from "../engine/errors";
+import { translateDbError } from "../db/errors";
 import { withTransaction } from "../db/transaction";
 import { PAGINATION_QUERY, sendPage, found } from "../modules/shared";
 
@@ -86,6 +87,11 @@ const toCoupon = (r: CouponRow): Coupon => ({
 
 /** مصدر بنود الخصم في الطلب، يقرؤه المستمع ليعرف أي كوبون استُخدم. */
 const SOURCE = "coupons";
+
+/** تاريخ الانتهاء يجب أن يكون تاريخاً حقيقياً (النمط وحده يقبل "2026-13-40T..."). */
+function checkExpiry(expiresAt: string | null | undefined, issues: Array<{ field: string; message: string }>): void {
+  if (expiresAt && Number.isNaN(Date.parse(expiresAt))) issues.push({ field: "expiresAt", message: "has an invalid format" });
+}
 
 export function coupons(): CommercePlugin {
   return {
@@ -194,14 +200,16 @@ export function coupons(): CommercePlugin {
           const issues: Array<{ field: string; message: string }> = [];
           if (!CODE_PATTERN.test(code)) issues.push({ field: "code", message: "has an invalid format" });
           if (body.kind === "percent" && body.value > 100) issues.push({ field: "value", message: "must be <= 100 for a percent coupon" });
+          checkExpiry(body.expiresAt, issues);
           if (issues.length) throw new ValidationError("Validation failed", issues);
           const { rows } = await pool.query<CouponRow>(
             `INSERT INTO coupons (code, kind, value, min_subtotal, max_redemptions, expires_at, is_active)
              VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
             [code, body.kind, body.value, body.minSubtotal ?? 0, body.maxRedemptions ?? null, body.expiresAt ?? null, body.isActive ?? true]
           ).catch((err: { code?: string }) => {
-            if (err.code === "23505") throw new ValidationError("Validation failed", [{ field: "code", message: "already exists" }], ErrorCodes.DUPLICATE_VALUE);
-            throw err;
+            // نفس رمز الإطار لأي قيمة مكررة: 409 DUPLICATE_VALUE، مع اسم الحقل في details.
+            if (err.code === "23505") throw new ConflictError("A coupon with this code already exists", [{ field: "code", message: "already exists" }], ErrorCodes.DUPLICATE_VALUE);
+            throw translateDbError(err);
           });
           res.status(201).json(toCoupon(rows[0] as CouponRow));
         })
@@ -219,15 +227,28 @@ export function coupons(): CommercePlugin {
             expiresAt: "expires_at",
             isActive: "is_active",
           };
+          const code = params.code.toUpperCase();
+          const current = await pool.query<{ kind: string }>("SELECT kind FROM coupons WHERE code = $1", [code]);
+          if (!current.rows[0]) throw new NotFoundError("Coupon not found");
+          const issues: Array<{ field: string; message: string }> = [];
+          if (current.rows[0].kind === "percent" && body.value !== undefined && body.value > 100) {
+            issues.push({ field: "value", message: "must be <= 100 for a percent coupon" });
+          }
+          checkExpiry(body.expiresAt, issues);
+          if (issues.length) throw new ValidationError("Validation failed", issues);
           const sets: string[] = ["updated_at = now()"];
-          const values: unknown[] = [params.code.toUpperCase()];
+          const values: unknown[] = [code];
           for (const [field, column] of Object.entries(columns)) {
             const value = (body as Record<string, unknown>)[field];
             if (value === undefined) continue;
             values.push(value);
             sets.push(`${column} = $${values.length}`);
           }
-          const { rows } = await pool.query<CouponRow>(`UPDATE coupons SET ${sets.join(", ")} WHERE code = $1 RETURNING *`, values);
+          const { rows } = await pool
+            .query<CouponRow>(`UPDATE coupons SET ${sets.join(", ")} WHERE code = $1 RETURNING *`, values)
+            .catch((err: unknown) => {
+              throw translateDbError(err);
+            });
           res.json(toCoupon(found(rows[0] ?? null, "Coupon")));
         })
       );

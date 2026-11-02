@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 import type { Queryable } from "../db/repository";
 import { isUuid } from "../db/ids";
+import { translateDbError } from "../db/errors";
 import { signToken, type TokenPayload } from "../engine/auth-token";
 import type { SessionVerifier } from "../middleware/auth";
 
@@ -65,6 +66,15 @@ export class SessionManager implements SessionVerifier {
 
   /** للمصادقة: هل جلسة هذا التوكن سارية؟ ويرجع الدور الحالي. */
   async verify(payload: TokenPayload): Promise<{ role: string } | null> {
+    try {
+      return await this.check(payload);
+    } catch (err) {
+      // القاعدة متوقفة أثناء المصادقة: 503 (أعد المحاولة)، لا 500 ولا "توكن غير صالح".
+      throw translateDbError(err);
+    }
+  }
+
+  private async check(payload: TokenPayload): Promise<{ role: string } | null> {
     if (!payload.sid || !isUuid(payload.sid) || !isUuid(payload.sub)) return null;
     const type: PrincipalType = payload.pt ?? "customer";
     const { rows } = await this.pool.query(

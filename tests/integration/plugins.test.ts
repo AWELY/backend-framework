@@ -183,6 +183,8 @@ test("online gateway plugin: redirect URL on checkout, webhook route marks the o
   assert.equal((await api(t.base, "POST", "/payments/mockpay/webhook", { body: { orderId: res.body.id, signature: "forged" } })).status, 400);
   const hook = await api(t.base, "POST", "/payments/mockpay/webhook", { body: { orderId: res.body.id, signature: "valid-signature" } });
   assert.deepEqual(hook.body, { ok: true, paymentStatus: "paid" });
+  // المستمعون يعملون من صندوق الصادر بعد COMMIT، لا قبل الرد: نوصل الأحداث المعلقة قبل الفحص.
+  await t.app.drainBackgroundWork();
   assert.ok(events.some((e) => e.name === "paymentChanged" && e.order.id === res.body.id));
 });
 
@@ -204,6 +206,7 @@ test("event listeners run after checkout, and a throwing listener does not break
     body: { cartId, ...contact, shippingMethod: "flat-rate", paymentMethod: "cod" },
   });
   assert.equal(res.status, 201);
+  await t.app.drainBackgroundWork();
   assert.ok(events.some((e) => e.name === "created" && e.order.id === res.body.id));
 });
 

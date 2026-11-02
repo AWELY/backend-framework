@@ -47,7 +47,10 @@ export async function withTransaction<T>(
 ): Promise<T> {
   const retries = options.retries ?? 3;
   for (let attempt = 0; ; attempt++) {
-    const client = await pool.connect();
+    // القاعدة متوقفة: 503 DATABASE_UNAVAILABLE، لا 500.
+    const client = await pool.connect().catch((err: unknown) => {
+      throw translateDbError(err);
+    });
     let retry = false;
     try {
       await client.query("BEGIN");

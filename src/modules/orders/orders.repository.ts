@@ -167,7 +167,7 @@ export class OrdersRepository {
     );
     const row = rows[0];
     if (!row) return null;
-    const items = await this.run<ItemRow>("SELECT * FROM order_items WHERE order_id = $1 ORDER BY ctid", [id]);
+    const items = await this.run<ItemRow>("SELECT * FROM order_items WHERE order_id = $1 ORDER BY line_no", [id]);
     return this.toOrder(row, items.rows.map((r) => this.toItem(r)));
   }
 
@@ -218,7 +218,7 @@ export class OrdersRepository {
     }
     if (rows.length === 0) return { items: [], total };
 
-    const items = await this.run<ItemRow>("SELECT * FROM order_items WHERE order_id = ANY($1::uuid[]) ORDER BY ctid", [
+    const items = await this.run<ItemRow>("SELECT * FROM order_items WHERE order_id = ANY($1::uuid[]) ORDER BY line_no", [
       rows.map((r) => r.id),
     ]);
     const byOrder = new Map<string, OrderItem[]>();
@@ -343,19 +343,28 @@ export class OrdersRepository {
     return this.toRefund(rows[0] as RefundRow);
   }
 
-  /** ينهي استرجاعاً: نجح (مع رقم العملية) أو فشل (فيُرجع المبلغ المحجوز من refunded_total). */
+  /**
+   * ينهي استرجاعاً: نجح (مع رقم العملية) أو فشل. الفشل يُرجع المبلغ المحجوز من refunded_total،
+   * ويُرجع الكميات المحجوزة للإرجاع (restocked_quantity). يُستدعى داخل معاملة (db اتصالها).
+   * استرجاع لم يعد pending (أنهاه طلب آخر) يُرجع كما هو دون تغيير.
+   */
   async completeRefund(refundId: string, outcome: { status: "succeeded" | "failed"; reference?: string }): Promise<Refund> {
     const { rows } = await this.run<RefundRow>(
       `UPDATE refunds SET status = $2, reference = COALESCE($3, reference), completed_at = now()
         WHERE id = $1 AND status = 'pending' RETURNING *`,
       [refundId, outcome.status, outcome.reference ?? null]
     );
-    const refund = rows[0] as RefundRow;
+    const refund = rows[0];
+    if (!refund) {
+      const existing = await this.run<RefundRow>("SELECT * FROM refunds WHERE id = $1", [refundId]);
+      return this.toRefund(existing.rows[0] as RefundRow);
+    }
     if (outcome.status === "failed") {
       await this.run("UPDATE orders SET refunded_total = refunded_total - $2, updated_at = now() WHERE id = $1", [
         refund.order_id,
         refund.amount,
       ]);
+      for (const line of refund.restock) await this.addRestocked(refund.order_id, { ...line, quantity: -line.quantity });
     }
     return this.toRefund(refund);
   }

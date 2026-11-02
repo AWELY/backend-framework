@@ -114,7 +114,11 @@ rate limits, deliver every event exactly once per listener even when one instanc
 
 Everything above is implemented and verified, except the license.
 
-- `npm test`: 146 tests pass on PostgreSQL 17 (the Phase 1, 4 and 5 exit tests included).
+- `npm test`: 156 tests pass on PostgreSQL 17 (the Phase 1, 4 and 5 exit tests included).
 - `npm run test:coverage`: lines 95%, branches 86%, functions 81% (gate: 90 / 80 / 75).
 - `npm run verify`: all checks pass (build, tests, CLI store, demo store, storefront).
 - `storefront/tests/browser.mjs`: customer, admin and courier flows pass in headless Chrome, with no console errors or CSP violations.
+
+Fixed after the code review that came with the documentation (tests in `tests/integration/review-fixes.test.ts`): idempotency keys scoped by the real path; refund restock reserved before the provider call and released on failure; payment deadline set inside the checkout transaction; payments arriving after a cancellation flagged for refund; stable order-line order; password change rate-limited; database outages return 503; migrations without statement timeout; `SHUTDOWN_DELAY_MS`.
+
+Fixed after the documentation review: the demo card gateway is now installed only in `DEMO_MODE`; the coupons plugin returns 409 for a duplicate code and 400 (not 500) for an out-of-range percent or an invalid date; the courier delivery routes now declare their permission in OpenAPI.

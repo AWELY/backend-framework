@@ -3489,6 +3489,7 @@
           "deliveries"
         ],
         "summary": "Courier picked the order up",
+        "description": "Requires permission `deliveries:update-own`.",
         "parameters": [
           {
             "name": "orderId",
@@ -3545,6 +3546,7 @@
           "deliveries"
         ],
         "summary": "Courier delivered the order",
+        "description": "Requires permission `deliveries:update-own`.",
         "parameters": [
           {
             "name": "orderId",
@@ -3606,6 +3608,7 @@
           "deliveries"
         ],
         "summary": "A delivery attempt failed",
+        "description": "Requires permission `deliveries:update-own`.",
         "parameters": [
           {
             "name": "orderId",
@@ -3996,6 +3999,7 @@
                   "SERVICE_UNAVAILABLE",
                   "TRANSACTION_CONFLICT",
                   "QUERY_TIMEOUT",
+                  "DATABASE_UNAVAILABLE",
                   "INTERNAL_ERROR"
                 ]
               },

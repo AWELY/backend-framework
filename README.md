@@ -208,6 +208,7 @@ at once. The full commented list is in [`.env.example`](.env.example).
 | `DB_POOL_MAX`, `DB_STATEMENT_TIMEOUT_MS`, `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS`, `DB_CONNECTION_TIMEOUT_MS` | `10`, `15000`, `30000`, `5000` | pool and timeouts |
 | `METRICS_TOKEN` | (empty) | protects `/metrics` with a bearer token |
 | `SHUTDOWN_TIMEOUT_MS` | `10000` | grace period for in-flight requests on SIGTERM |
+| `SHUTDOWN_DELAY_MS` | `0` | behind a load balancer: time between `/readyz` turning 503 and closing the listener |
 | `HSTS` | `false` | `Strict-Transport-Security`; enable only behind HTTPS |
 
 Options that are code rather than configuration (plugins, roles, rate limits, workers) are passed
@@ -250,7 +251,7 @@ npm run test:browser                                  # drives all three sides i
 
 ## Quality
 
-- **146 tests** on real PostgreSQL, including:
+- **156 tests** on real PostgreSQL, including:
   - 500 concurrent checkouts with exact stock reconciliation;
   - two instances sharing one database;
   - fuzzing of the router and validator;

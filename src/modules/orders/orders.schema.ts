@@ -145,6 +145,12 @@ export const ordersMigrations: Migration[] = [
     `,
   },
   {
+    // ترتيب ثابت لسطور الطلب. ctid (الموقع الفعلي للصف) يتغير بعد UPDATE، فكانت السطور تتبدل
+    // بعد إعادة كمية للمخزون. BIGSERIAL يملأ الصفوف القديمة بالترتيب الحالي.
+    id: "0965_order_items_line_no",
+    up: `ALTER TABLE order_items ADD COLUMN line_no BIGSERIAL;`,
+  },
+  {
     id: "0970_order_events",
     up: `
       CREATE TABLE order_events (

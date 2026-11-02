@@ -2,6 +2,7 @@ import type { CommerceModule } from "../types";
 import type { AppRequest } from "../../engine/http/request";
 import { withInput } from "../../middleware/validate";
 import { requirePermission } from "../../middleware/auth";
+import { withMeta } from "../../engine/route-meta";
 import { ForbiddenError, NotFoundError } from "../../engine/errors";
 import { sendPage, PAGINATION_QUERY, ID_PARAMS } from "../shared";
 import { ORDERS_SERVICE } from "../orders/orders.service";
@@ -85,28 +86,31 @@ export const deliveryModule: CommerceModule = {
       })
     );
 
+    // الصلاحية تُفحص في الخدمة (المندوب المسند، أو deliveries:update-all)؛ البطاقة تصفها لـ OpenAPI.
     router.post(
       "/deliveries/:orderId/pickup",
       authenticate,
-      withInput({ params: ORDER_PARAMS, body: pickupSchema, summary: "Courier picked the order up" }, async (req, res, { params, body }) => {
+      withMeta(withInput({ params: ORDER_PARAMS, body: pickupSchema, summary: "Courier picked the order up" }, async (req, res, { params, body }) => {
         res.json(await service().pickup(req, params.orderId, body.note));
-      })
+      }), { permission: "deliveries:update-own" })
     );
 
+    // الصلاحية تُفحص في الخدمة (المندوب المسند، أو deliveries:update-all)؛ البطاقة تصفها لـ OpenAPI.
     router.post(
       "/deliveries/:orderId/deliver",
       authenticate,
-      withInput({ params: ORDER_PARAMS, body: deliverSchema, summary: "Courier delivered the order" }, async (req, res, { params, body }) => {
+      withMeta(withInput({ params: ORDER_PARAMS, body: deliverSchema, summary: "Courier delivered the order" }, async (req, res, { params, body }) => {
         res.json(await service().deliver(req, params.orderId, body));
-      })
+      }), { permission: "deliveries:update-own" })
     );
 
+    // الصلاحية تُفحص في الخدمة (المندوب المسند، أو deliveries:update-all)؛ البطاقة تصفها لـ OpenAPI.
     router.post(
       "/deliveries/:orderId/fail",
       authenticate,
-      withInput({ params: ORDER_PARAMS, body: failSchema, summary: "A delivery attempt failed" }, async (req, res, { params, body }) => {
+      withMeta(withInput({ params: ORDER_PARAMS, body: failSchema, summary: "A delivery attempt failed" }, async (req, res, { params, body }) => {
         res.json(await service().fail(req, params.orderId, body.note));
-      })
+      }), { permission: "deliveries:update-own" })
     );
   },
 };

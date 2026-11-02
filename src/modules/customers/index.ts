@@ -193,10 +193,15 @@ export const customersModule: CommerceModule = {
       authenticate,
       withInput({ body: passwordChangeSchema, summary: "Change the password", successStatus: 204 }, async (req, res, { body }) => {
         const id = selfId(req);
+        // توكن مسروق لا يكفي لتخمين كلمة المرور الحالية بلا حد: نفس حد محاولات الدخول.
+        const key = `password-change:${id}`;
+        await checkLimit(limiters.login, [key], "Too many failed attempts. Try again later.");
         const stored = await repo().passwordHashOf(id);
         if (!stored || !(await verifyPassword(body.currentPassword, stored))) {
+          await limiters.login?.recordFailure(key);
           throw new ValidationError("Validation failed", [{ field: "currentPassword", message: "is incorrect" }], ErrorCodes.INVALID_CREDENTIALS);
         }
+        await limiters.login?.reset(key);
         await repo().setPassword(id, await hashPassword(body.newPassword));
         // هذا الجهاز يبقى داخلاً، وكل الأجهزة الأخرى تخرج (ربما كانت بيد من عرف كلمة المرور القديمة).
         await sessions.revokeAll("customer", id, { exceptSessionId: req.auth?.sessionId });

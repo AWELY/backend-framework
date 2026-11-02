@@ -51,6 +51,8 @@ export async function runMigrations(
   try {
     // ننتظر القفل: إن كانت عملية أخرى تطبّق الـ migrations الآن، ننتظرها حتى تنتهي.
     await client.query("SELECT pg_advisory_lock($1)", [MIGRATION_LOCK_KEY]);
+    // migration قد يأخذ دقائق (فهرس على جدول كبير): لا نطبّق عليه statement_timeout الخاص بالطلبات.
+    await client.query("SET statement_timeout = 0");
     // جدول السجل نفسه، يُنشأ في أول مرة فقط.
     await client.query(
       "CREATE TABLE IF NOT EXISTS schema_migrations (id TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"
@@ -81,6 +83,8 @@ export async function runMigrations(
     // يعمل دائماً، نجحنا أو فشلنا: نفك القفل ونعيد الاتصال للمجموعة.
     // و catch تتجاهل خطأ فك القفل إن انقطع الاتصال أصلاً (القفل يُفك وحده عندها).
     await client.query("SELECT pg_advisory_unlock($1)", [MIGRATION_LOCK_KEY]).catch(() => undefined);
+    // الاتصال يعود للمجموعة: نعيد إعداده الأصلي حتى لا يصل استعلام عادي بلا مهلة.
+    await client.query("RESET statement_timeout").catch(() => undefined);
     client.release();
   }
 }

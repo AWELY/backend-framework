@@ -342,6 +342,14 @@ export class OrdersService {
           lineTotal: l.price * l.quantity,
         })),
       });
+      // مهلة الدفع تبدأ مع الطلب نفسه: لو توقف الخادم قبل بدء الدفع، يُلغى الطلب بعد المهلة ويعود
+      // مخزونه، بدل أن يبقى محجوزاً للأبد بلا دفع.
+      if (paymentProvider?.holdSeconds) {
+        await query(client, "UPDATE orders SET payment_expires_at = now() + make_interval(secs => $2) WHERE id = $1", [
+          id,
+          paymentProvider.holdSeconds,
+        ]);
+      }
       await this.timelineRepo.record(id, { type: "created", to: "pending", actor }, client);
       await query(client, "UPDATE carts SET status = 'checked_out', updated_at = now() WHERE id = $1", [cart.id]);
       await this.events.publish(client, "order.created", { order: (await repo.findById(id)) as Order });
@@ -461,7 +469,11 @@ export class OrdersService {
       );
     }
     await repo.setPayment(orderId, status, reference, status === "paid" ? null : holdSeconds);
-    await this.timelineRepo.record(orderId, { type: "payment", from: current.paymentStatus, to: status, actor }, client);
+    // دفع وصل بعد إلغاء الطلب (مثلاً بعد انتهاء المهلة): نسجّل الحقيقة (المال وصل)، وننبّه المحل
+    // ليسترجعه، بدل رفض الـ webhook فتعيده البوابة بلا نهاية.
+    const lateNote = current.status === "cancelled" && status === "paid" ? "Paid after the order was cancelled: refund it" : null;
+    if (lateNote) this.logger.warn(lateNote, { orderId });
+    await this.timelineRepo.record(orderId, { type: "payment", from: current.paymentStatus, to: status, actor, note: lateNote }, client);
     const order = (await repo.findById(orderId)) as Order;
     await this.events.publish(client, "order.paymentChanged", { order, from: current.paymentStatus });
     return order;
@@ -520,6 +532,9 @@ export class OrdersService {
         }
       });
       if (issues.length > 0) throw new ValidationError("Validation failed", issues);
+      // نحجز الكميات الآن (restocked_quantity)، قبل أن تسترجع البوابة المال: إلغاء أو استرجاع متزامن
+      // يرى الحجز فلا يعيد نفس القطع مرتين، ولا يفشل هذا الاسترجاع بعد أن يكون المال قد أُعيد.
+      for (const line of [...restock].sort(byStockLockOrder)) await repo.addRestocked(orderId, line);
       const refund = await repo.insertRefund(orderId, input.amount, input.reason ?? null, restock, actor);
       return { refund, order };
     });
@@ -530,7 +545,7 @@ export class OrdersService {
       try {
         reference = (await provider.refund(before, input.amount))?.reference;
       } catch (err) {
-        await new OrdersRepository(this.pool).completeRefund(pending.id, { status: "failed" });
+        await withTransaction(this.pool, (client) => new OrdersRepository(client).completeRefund(pending.id, { status: "failed" }));
         this.logger.error(`Payment provider '${provider.id}' refused a refund`, {
           orderId,
           message: err instanceof Error ? err.message : String(err),
@@ -544,11 +559,11 @@ export class OrdersService {
       const current = (await repo.findById(orderId, { forUpdate: true })) as Order;
       const refund = await repo.completeRefund(pending.id, { status: "succeeded", reference });
       const inventory = new InventoryRepository(client);
+      // الكميات محجوزة منذ المرحلة أ؛ هنا تعود للمخزون فعلاً.
       for (const line of [...restock].sort(byStockLockOrder)) {
         await inventory.adjustLine(line, line.quantity).catch((err: unknown) => {
           if (!(err instanceof NotFoundError)) throw err;
         });
-        await repo.addRestocked(orderId, line);
       }
       const next: PaymentStatus = current.refundedTotal >= current.total ? "refunded" : "partially_refunded";
       await repo.setPayment(orderId, next, undefined);

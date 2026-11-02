@@ -1,5 +1,7 @@
 import type { Server } from "node:http";
 import { monitorEventLoopDelay } from "node:perf_hooks";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Pool } from "pg";
 import { Router } from "./engine/router";
 import { createServer } from "./engine/http/server";
@@ -36,6 +38,15 @@ import { AuditLog } from "./runtime/audit-log";
 import { EventOutbox } from "./runtime/outbox";
 import { JobQueue } from "./runtime/jobs";
 import { BackgroundWorker } from "./runtime/worker";
+
+/** نسخة الإطار من package.json (تظهر في OpenAPI)، أو "0.0.0" إن تعذرت قراءته. */
+const FRAMEWORK_VERSION: string = (() => {
+  try {
+    return (JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8")) as { version?: string }).version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+})();
 
 /** إعداد حد محاولات واحد: العدد والنافذة، أو false لإطفائه. */
 export type RateLimitSetting = Pick<LimiterOptions, "maxFailures" | "windowSeconds"> | false;
@@ -106,6 +117,11 @@ export interface CommerceAppOptions {
   serverTimeouts?: { requestTimeoutMs?: number; headersTimeoutMs?: number; keepAliveTimeoutMs?: number };
   /** كم ينتظر close() الطلبات الجارية قبل قطعها. الافتراضي 10 ثوانٍ. */
   shutdownTimeoutMs?: number;
+  /**
+   * كم ينتظر close() بعد أن يصبح /readyz 503 وقبل أن يتوقف عن قبول الاتصالات. موازن الأحمال يفحص
+   * /readyz كل بضع ثوانٍ؛ هذه المهلة تعطيه وقتاً ليتوقف عن الإرسال قبل أن تُرفض الاتصالات. الافتراضي 0.
+   */
+  shutdownDelayMs?: number;
 }
 
 /** ما يحصل عليه المتجر: التطبيق جاهزاً، مع أدوات تشغيله. */
@@ -456,6 +472,8 @@ export function createCommerceApp(options: CommerceAppOptions): CommerceApp {
     close: (closeOptions = {}) => {
       closing ??= (async () => {
         shuttingDown = true;
+        const delayMs = options.shutdownDelayMs ?? 0;
+        if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
         const timeoutMs = closeOptions.timeoutMs ?? options.shutdownTimeoutMs ?? 10_000;
         // لا طلبات جديدة، والاتصالات الخاملة (keep-alive) تُغلق الآن، والجارية تُنتظر حتى المهلة.
         const closed = new Promise<void>((resolve) => server.close(() => resolve()));
@@ -480,7 +498,7 @@ export function createCommerceApp(options: CommerceAppOptions): CommerceApp {
     openapi: () =>
       generateOpenApi(router.list(), systemRouter.list(), {
         title: "Maa commerce API",
-        version: "1.0.0",
+        version: FRAMEWORK_VERSION,
         description: "Generated from the route schemas. Error codes: see components.schemas.Error.",
         basePath: options.basePath ?? "",
       }),
@@ -509,6 +527,7 @@ export function optionsFromConfig(config: AppConfig, logger?: Logger): CommerceA
     metrics: config.metricsToken ? { token: config.metricsToken } : {},
     hsts: config.hsts,
     shutdownTimeoutMs: config.shutdownTimeoutMs,
+    shutdownDelayMs: config.shutdownDelayMs,
     logger: logger ?? new Logger(config.logLevel, { format: config.logFormat }),
   };
 }
