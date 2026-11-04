@@ -45,7 +45,7 @@ async function load() {
             <div class="field"><label for="slug">الاسم في الرابط</label><input id="slug" name="slug" class="ltr" maxlength="200" value="${esc(p.slug)}" placeholder="fast-charger-20w" required>
               <span class="hint">حروف إنجليزية صغيرة وأرقام وشرطات. لا يتكرر بين منتجين.</span><div class="error"></div></div>
             <div class="field"><label for="price">السعر بالدينار</label><input id="price" name="price" type="number" min="0" step="0.001" class="ltr" value="${product ? esc(toLyd(p.price)) : ""}" placeholder="35" required>
-              <span class="hint">يُحفظ بالدرهم: 35.5 دينار = 35500.</span><div class="error"></div></div>
+              <span class="hint">يُحفظ بالدرهم، والدينار ألف درهم.</span><div class="error"></div></div>
             <div class="field"><label for="category">القسم</label>
               <select id="category" name="categoryId"><option value="">بلا قسم</option>
                 ${categories.map((c) => `<option value="${esc(c.id)}" ${c.id === p.categoryId ? "selected" : ""}>${esc(c.name)}</option>`).join("")}
@@ -66,7 +66,7 @@ async function load() {
         <div class="box-body">
           <img class="img-preview" src="${esc(previewSrc(p.imageUrl))}" alt="" data-preview>
           <div class="field"><label for="imageUrl">رابط الصورة</label><input id="imageUrl" name="imageUrl" class="ltr" maxlength="2000" value="${esc(p.imageUrl ?? "")}" placeholder="/images/products/name.webp">
-            <span class="hint">مسار على موقع المتجر يبدأ بـ / أو رابط كامل يبدأ بـ https://</span><div class="error"></div></div>
+            <span class="hint">مسار على موقع المتجر يبدأ بـ <span class="ltr">/</span> أو رابط كامل يبدأ بـ <span class="ltr">https://</span></span><div class="error"></div></div>
           ${images.length ? `<span class="muted">أو اختر من الصور الموجودة:</span>
           <div class="img-picks">${images.map((src) => `<button type="button" data-pick="${esc(src)}" class="${src === p.imageUrl ? "on" : ""}" aria-label="اختيار هذه الصورة"><img src="${esc(previewSrc(src))}" alt="" loading="lazy"></button>`).join("")}</div>` : ""}
         </div>
@@ -116,7 +116,7 @@ function bindForm(form) {
       slug: SLUG.test(slug) ? null : "حروف إنجليزية صغيرة وأرقام وشرطات فقط، مثل usb-cable-2m",
       price: form.price.value !== "" && price >= 0 ? null : "أدخل السعر بالدينار",
       quantity: Number.isInteger(quantity) && quantity >= 0 ? null : "رقم صحيح من 0 فأكثر",
-      imageUrl: !imageUrl || /^(https?:\/\/|\/)\S+$/.test(imageUrl) ? null : "يبدأ بـ / أو https://",
+      imageUrl: !imageUrl || /^(https?:\/\/|\/)\S+$/.test(imageUrl) ? null : "الرابط يبدأ بشرطة مائلة أو بـ https",
     };
     for (const [field, message] of Object.entries(errors)) fieldError(field, message);
     if (Object.values(errors).some(Boolean)) return;
