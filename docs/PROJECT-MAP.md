@@ -22,7 +22,7 @@
 | `tests/` | الاختبارات: `unit/` للوحدات، و`integration/` للتكامل مع قاعدة البيانات |
 | `cli/` | أداة سطر الأوامر `create` وقوالب المشروع الجديد |
 | `examples/demo-store/` | Demo E-Commerce API: مثال يستخدم الإطار كمكتبة |
-| `storefront/` | متجر AMA: خادم المتجر (`api/`) والموقع (`web/`) |
+| `storefront/` | متجر AMA: خادم المتجر (`api/`) وإضافاته (`api/plugins/`)، والموقع (`web/`) ولوحة التحكم (`web/admin/`) وتطبيق المندوب (`web/courier/`) |
 | `bench/` | قياس الأداء |
 | `scripts/` | `verify.js` (الفحص الشامل) و`setup-env.js` |
 | `docs/` | الأدلة (هذا الملف منها) |
@@ -106,6 +106,14 @@
 | أعدّل الاتصال بالـ API | `storefront/web/js/api.js` |
 | أعدّل العناصر المشتركة (الرأس، والسلة، والرسائل، وترجمة الأخطاء) | `storefront/web/js/ui.js` |
 | أعدّل سياسة الأمان (CSP) | `storefront/web-server.js` |
+| أعدّل صلاحيات المدير أو المندوب | `storefront/api/app.js` (`ROLES`) |
+| أعدّل حسابات الموظفين أو دخولهم | `storefront/api/plugins/staff.js` |
+| أعدّل تعيين المندوبين والاستلام والتسليم | `storefront/api/plugins/delivery.js` |
+| أعدّل سجل الطلب أو إلغاء الزبون لطلبه | `storefront/api/plugins/customer-orders.js` |
+| أعدّل أرقام لوحة التحكم | `storefront/api/plugins/reports.js` (والصفحة `storefront/web/js/admin/pages/dashboard.js`) |
+| أعدّل صفحة في لوحة التحكم | `storefront/web/admin/<الصفحة>.html` وسكربتها في `storefront/web/js/admin/pages/` |
+| أعدّل تطبيق المندوب | `storefront/web/js/courier/app.js` |
+| أعدّل تصميم اللوحة والتطبيق | `storefront/web/css/admin.css` |
 | أضيف صور منتجات | `storefront/web/images/products/` |
 
 ## الاختبارات: أين يُختبر كل شيء

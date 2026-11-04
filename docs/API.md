@@ -162,3 +162,45 @@
 | الطريقة | المسار | الوصف |
 |---|---|---|
 | GET | `/health` | `{ status, database }`، ويفحص الاتصال بقاعدة البيانات فعلياً |
+
+## مسارات متجر AMA (إضافات المتجر، ليست من الإطار)
+
+هذه المسارات موجودة فقط في متجر AMA (`storefront/api/plugins/`)، لا في الإطار نفسه. هي مثال على ما يضيفه متجر بنقاط التوسع العامة، وتستخدمها لوحة التحكم وتطبيق المندوب. الأدوار `admin` و `courier` يعرّفها المتجر في `storefront/api/app.js` (`ROLES`).
+
+**الموظفون** (`staff.js`). توكن الموظف يُرسل مثل توكن الزبون: `Authorization: Bearer <token>`، ومدته 12 ساعة.
+
+| الطريقة | المسار | الصلاحية | الوصف |
+|---|---|---|---|
+| POST | `/staff/login` | عام | body: `{ email, password }` → `{ staff, token }`. حد للمحاولات الفاشلة، و403 للحساب الموقوف |
+| GET | `/staff/me` | موظف نشط | بيانات الموظف المسجل دخوله |
+| GET | `/staff?role=` | `staff:manage` | كل الموظفين، أو `?role=courier` للمندوبين فقط |
+| POST | `/staff` | `staff:manage` | body: `{ name, email, password, role, phone? }` → 201. البريد المكرر 409 |
+| PATCH | `/staff/:id` | `staff:manage` | body: `{ name?, phone?, password?, isActive? }`. المدير لا يوقف حسابه هو (409) |
+
+**التوصيل** (`delivery.js`). المدير يعيّن مندوباً للطلب **المؤكد**، والمندوب يغيّر الحالة عبر خدمة الطلبات في الإطار (فآلة الحالات سارية).
+
+| الطريقة | المسار | الصلاحية | الوصف |
+|---|---|---|---|
+| PUT | `/orders/:id/courier` | `deliveries:manage` | body: `{ courierId }`. الطلب `confirmed` فقط، ولا تغيير بعد استلام المندوب (409) |
+| DELETE | `/orders/:id/courier` | `deliveries:manage` | إلغاء التعيين قبل الاستلام → 204 |
+| GET | `/deliveries?orderIds=a,b` | `deliveries:manage` | معلومات التوصيل لطلبات محددة (حتى 100)، أو الجارية بلا `orderIds` |
+| GET | `/deliveries/couriers` | `deliveries:manage` | لكل مندوب: طلباته الجارية، وما سلّمه اليوم، والنقد الذي حصّله اليوم |
+| GET | `/courier/deliveries?scope=active\|done` | `deliveries:work` | طلبات المندوب نفسه فقط، بما يحتاجه للتوصيل (ومنها `amountToCollect`) |
+| POST | `/courier/deliveries/:orderId/pickup` | `deliveries:work` | استلم الطلب من المحل: الطلب يصبح `shipped` |
+| POST | `/courier/deliveries/:orderId/deliver` | `deliveries:work` | سلّمه: الطلب `delivered`، والدفع النقدي `paid` باسم المندوب |
+| POST | `/courier/deliveries/:orderId/note` | `deliveries:work` | body: `{ note }`: إبلاغ المدير بمشكلة |
+
+**طلبات الزبون** (`customer-orders.js`). نفس قاعدة الرؤية في `GET /orders/:id`.
+
+| الطريقة | المسار | الصلاحية | الوصف |
+|---|---|---|---|
+| GET | `/orders/:id/history` | المدير، أو صاحب الطلب، أو ضيف بـ `?phone=` | سجل مراحل الطلب: `[{ kind, from, to, at }]`، من أحداث الإطار |
+| POST | `/orders/:id/cancel` | صاحب الطلب، أو ضيف بـ `?phone=` | إلغاء الطلب ما دام `pending` (وإلا 409). المخزون يعود تلقائياً |
+
+**التقارير** (`reports.js`). المبالغ بالدرهم، ولا تحسب الطلبات الملغاة، و"اليوم" بتوقيت ليبيا.
+
+| الطريقة | المسار | الصلاحية | الوصف |
+|---|---|---|---|
+| GET | `/admin/summary` | `reports:read` | المبيعات (اليوم والشهر والكل)، والطلبات حسب الحالة، ومبيعات آخر 14 يوماً، والأكثر مبيعاً، والمخزون القليل |
+| GET | `/admin/stock` | `reports:read` | كمية كل المنتجات في طلب واحد |
+| GET | `/admin/customer-stats` | `customers:read` | لكل زبون مسجل: عدد طلباته، ومجموع مشترياته، وآخر طلب |

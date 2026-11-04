@@ -26,7 +26,9 @@ tested against a real PostgreSQL 17 database:
 - **Project map** (`docs/PROJECT-MAP.md`, Arabic): where every feature, route, table and test lives.
 - **AMA storefront** (`storefront/`): a real Arabic e-commerce website (electronics &
   phone accessories, Tripoli - Tajoura) built on the framework - plain HTML/CSS/JS,
-  city-based delivery, cash on delivery, guest and customer checkout. See `storefront/README.md`.
+  city-based delivery, cash on delivery, guest and customer checkout, plus an admin dashboard
+  and a courier app built as store plugins on the framework's public extension points.
+  See `storefront/README.md`.
 - Documentation (Arabic): `docs/API.md` (API contract), `docs/PERFORMANCE.md`
   (performance evaluation, `npm run bench`).
 
@@ -114,7 +116,7 @@ src/
 cli/            scaffolding tool (commander) + templates; never imports src/
 tests/          unit/ and integration/ (node:test, real PostgreSQL)
 examples/       demo-store: a store built on the framework as a library
-storefront/     AMA: the store's API (api/) + website (web/) + browser test
+storefront/     AMA: the store's API (api/, plugins/) + website, admin, courier app (web/) + browser test
 bench/          performance evaluation (npm run bench)
 docs/           API contract and performance report (Arabic)
 ```
