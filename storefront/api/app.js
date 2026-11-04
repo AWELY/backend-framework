@@ -5,10 +5,18 @@ const {
   loadConfig,
   Logger,
   createCommerceApp,
+  AccessControl,
+  DEFAULT_ROLES,
   cashOnDelivery,
   cityRateShipping,
   flatRateShipping,
 } = require("commerce-framework");
+// إضافات خاصة بمتجر AMA (في مجلد plugins): حسابات الموظفين، والتوصيل بالمندوبين، وسجل الطلب
+// وإلغاؤه للزبون، وتقارير لوحة التحكم. كلها تستخدم الواجهة العامة للإطار فقط.
+const { staffAccounts } = require("./plugins/staff");
+const { courierDelivery } = require("./plugins/delivery");
+const { customerOrders } = require("./plugins/customer-orders");
+const { storeReports } = require("./plugins/reports");
 
 /**
  * الواجهة الخلفية لمتجر AMA كاملة. الإطار يقوم بكل العمل، وهذا الملف فقط "يضبط" الإطار
@@ -42,6 +50,33 @@ const DELIVERY_RATES = {
 };
 
 /**
+ * جدول الأدوار والصلاحيات لهذا المتجر: أدوار الإطار الافتراضية (owner و customer)، ومعها دوران
+ * جديدان للموظفين. الإطار يفحص الصلاحية لا اسم الدور (access-control.ts)، فإضافة دور كاملة تعني
+ * إضافة سطر هنا فقط، ومسارات الإطار نفسها تقبله فوراً.
+ *
+ *   admin   (مدير المتجر في لوحة التحكم): المنتجات والأقسام والمخزون والطلبات (orders:* تشمل
+ *           orders:read-all و orders:write)، وقراءة الزبائن، وإدارة الموظفين والتوصيل، والتقارير.
+ *           ليس عنده cart:manage، فهو لا يشتري بحسابه هذا.
+ *   courier (مندوب التوصيل): صلاحية واحدة، العمل على التوصيلات المعيّنة له.
+ *
+ * owner (مفتاح OWNER_API_KEY) يبقى عنده "*"، أي كل شيء، لـ Postman والسكربتات.
+ */
+const ROLES = {
+  ...DEFAULT_ROLES,
+  admin: [
+    "products:*",
+    "categories:*",
+    "inventory:*",
+    "orders:*",
+    "customers:read",
+    "staff:manage",
+    "deliveries:manage",
+    "reports:read",
+  ],
+  courier: ["deliveries:work"],
+};
+
+/**
  * يبني تطبيق المتجر. ثلاثة ملفات تستخدمها: index.js (التشغيل)، و migrate.js (الجداول)،
  * و seed.js (البيانات الأولية). logLevel اختياري، وإلا يُقرأ من .env.
  */
@@ -55,7 +90,10 @@ function buildApp(logLevel) {
     corsOrigin: config.corsOrigin,
     trustProxy: config.trustProxy,
     logger: new Logger(logLevel ?? config.logLevel),
-    // الإضافات الثلاث التي اختارها هذا المتجر. متجر آخر يختار غيرها، دون تعديل الإطار.
+    accessControl: new AccessControl(ROLES),
+    // إضافات الإطار الثلاث التي اختارها هذا المتجر، ثم إضافات المتجر نفسه. متجر آخر يختار غيرها،
+    // دون تعديل الإطار. الترتيب مهم: staffAccounts قبل courierDelivery، لأن التوصيل يطلب
+    // مستودع الموظفين من الحاوية (والإطار يهيئ الإضافات بترتيبها هنا).
     plugins: [
       cityRateShipping({ name: "توصيل للمنزل", rates: DELIVERY_RATES, freeOver: 500000 }), // مجاني فوق 500 دينار
       flatRateShipping({ id: "pickup", name: "استلام من المحل - تاجوراء", rate: 0 }),
@@ -63,9 +101,14 @@ function buildApp(logLevel) {
         name: "الدفع نقداً عند الاستلام",
         instructions: "ادفع نقداً للمندوب عند استلام طلبك، أو في المحل إن اخترت الاستلام من المحل.",
       }),
+      // توكن الموظف موقّع بنفس سر الإطار، فتقبله مصادقة الإطار في كل المسارات.
+      staffAccounts({ tokenSecret: config.authTokenSecret }),
+      courierDelivery({ cashPaymentMethods: ["cod"] }),
+      customerOrders(),
+      storeReports(),
     ],
   });
   return { app, config };
 }
 
-module.exports = { buildApp };
+module.exports = { buildApp, ROLES };

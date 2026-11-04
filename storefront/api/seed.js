@@ -1,8 +1,10 @@
-const { CATEGORIES_REPOSITORY, PRODUCTS_REPOSITORY, INVENTORY_REPOSITORY } = require("commerce-framework");
+const { CATEGORIES_REPOSITORY, PRODUCTS_REPOSITORY, INVENTORY_REPOSITORY, hashPassword } = require("commerce-framework");
 const { buildApp } = require("./app");
+const { STAFF_REPOSITORY } = require("./plugins/staff");
 
 /**
- * الكتالوج التجريبي لمتجر AMA: 6 أقسام و 16 منتجاً. الأسعار بالدرهم (1 دينار = 1000).
+ * الكتالوج التجريبي لمتجر AMA: 6 أقسام و 16 منتجاً، و3 حسابات موظفين تجريبية (مدير ومندوبان).
+ * الأسعار بالدرهم (1 دينار = 1000).
  *
  * كميات المخزون متنوعة عمداً (نفد، وبقي 2 فقط، وكمية كبيرة)، ليعرض الموقع كل حالات المخزون.
  * صورة كل منتج في web/images/products/<slug>.webp (صور مجانية من Unsplash، ومصادرها في
@@ -76,6 +78,17 @@ const CATALOGUE = [
 ];
 
 /**
+ * حسابات موظفين تجريبية، لتجربة لوحة التحكم وتطبيق المندوب مباشرة بعد التثبيت.
+ * كلمات المرور معروفة (مكتوبة في README)، فهي لقاعدة تجريبية فقط: على متجر حقيقي أوقفها من
+ * لوحة التحكم (صفحة الموظفين)، وأنشئ حساباتك بـ npm run create-staff.
+ */
+const DEMO_STAFF = [
+  { role: "admin", name: "مدير المتجر", email: "admin@ama.ly", phone: "0910000001", password: "Ama@admin2026" },
+  { role: "courier", name: "أحمد سالم", email: "ahmed@ama.ly", phone: "0920000002", password: "Ama@courier2026" },
+  { role: "courier", name: "خالد عمر", email: "khaled@ama.ly", phone: "0910000003", password: "Ama@courier2026" },
+];
+
+/**
  * npm run seed: يملأ الكتالوج. يطلب مستودعات الوحدات من حاوية الـ DI مباشرة، دون المرور
  * بالـ API، ويطابق الموجود بالـ slug فلا يكرره.
  */
@@ -119,6 +132,15 @@ async function main() {
         await inventory.set(product.id, item.stock);
         created++;
       }
+    }
+    // الموظفون التجريبيون: من مستودع إضافة الموظفين في الحاوية، تماماً كمستودعات الإطار.
+    // الموجود (بنفس البريد) لا يُلمس، فتشغيل seed مرة ثانية لا يعيد كلمة مرور غيّرتها.
+    const staff = app.container.resolve(STAFF_REPOSITORY);
+    for (const member of DEMO_STAFF) {
+      if (await staff.findCredentials(member.email)) continue;
+      const { password, ...rest } = member;
+      await staff.create({ ...rest, passwordHash: await hashPassword(password) });
+      created++;
     }
     console.log(created ? `Seeded ${created} record(s).` : "Catalogue already seeded - nothing to do.");
   } finally {

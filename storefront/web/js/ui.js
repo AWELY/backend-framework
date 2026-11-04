@@ -49,6 +49,15 @@ export function priceHtml(dirhams) {
   return `<span class="amount">${amount}</span> <span class="currency">${currency}</span>`;
 }
 
+/**
+ * السعر داخل "ملصق السعر" البرتقالي (العنصر المميز في تصميم المتجر، .tag في styles.css).
+ * large: الملصق الكبير في صفحة المنتج. off: ملصق رمادي للمنتج الذي نفد.
+ * الأرقام فقط تدخل هنا (لا نص من المستخدم)، فلا حاجة لـ esc.
+ */
+export function priceTag(dirhams, { large = false, off = false } = {}) {
+  return `<span class="tag${large ? " tag-lg" : ""}${off ? " off" : ""}">${priceHtml(dirhams)}</span>`;
+}
+
 /** شارة حالة المخزون: نفد، أو "باقي 3 فقط" إن كان 3 أو أقل، أو متوفر. */
 export function stockBadge(quantity) {
   if (quantity <= 0) return `<span class="stock out">نفدت الكمية</span>`;
@@ -95,6 +104,16 @@ const FIELD_LABELS = {
   shippingMethod: "طريقة الاستلام",
   paymentMethod: "طريقة الدفع",
   quantity: "الكمية",
+  // حقول لوحة التحكم وتطبيق المندوب.
+  slug: "الاسم في الرابط",
+  price: "السعر",
+  description: "الوصف",
+  imageUrl: "رابط الصورة",
+  categoryId: "القسم",
+  role: "الدور",
+  courierId: "المندوب",
+  note: "الملاحظة",
+  delta: "مقدار التغيير",
 };
 
 /** يترجم رسالة مشكلة حقل من مدقّق الإطار (engine/validation.ts) إلى العربية. */
@@ -103,6 +122,8 @@ function fieldMessage(message) {
   if (message === "has an invalid format") return "صيغته غير صحيحة";
   if (message.startsWith("must be at least")) return `قصير جداً (${message.match(/\d+/)?.[0] ?? ""} أحرف على الأقل)`;
   if (message.startsWith("must be one of")) return "اختر قيمة من القائمة";
+  if (message === "must be an active courier") return "اختر مندوباً نشطاً";
+  if (message.startsWith("must be at most") || message.startsWith("must be no more")) return "أطول من المسموح";
   return "قيمة غير صحيحة";
 }
 
@@ -130,6 +151,17 @@ export function errorText(err) {
   if (err.message === "This cart has already been checked out") return "تم إرسال هذه السلة مسبقاً.";
   if (err.message === "Some products in the cart are no longer available") return "بعض المنتجات في سلتك لم تعد متوفرة. احذفها وأعد المحاولة.";
   if (err.message === "The cart is empty") return "سلتك فارغة.";
+  // رسائل إضافات المتجر (حسابات الموظفين، والتوصيل، وإلغاء الزبون لطلبه).
+  if (err.message === "This account is disabled") return "هذا الحساب موقوف. تواصل مع مدير المتجر.";
+  if (err.message === "You cannot disable your own account") return "لا يمكنك إيقاف حسابك أنت.";
+  if (err.message === "Only orders under review can be cancelled") return "لا يمكن إلغاء الطلب بعد تأكيده. تواصل مع المتجر.";
+  if (err.message === "Only confirmed orders can be assigned to a courier") return "أكّد الطلب أولاً، ثم عيّن له مندوباً.";
+  if (err.message === "The courier has already picked up this order") return "استلم المندوب الطلب من المحل، فلا يمكن تغييره الآن.";
+  if (err.message === "Pick up the order before delivering it") return "سجّل استلام الطلب من المحل أولاً.";
+  if (err.message === "This order is not waiting for pickup") return "هذا الطلب ليس بانتظار الاستلام (ربما أُلغي أو تغيّرت حالته).";
+  // 409 من آلة حالات الطلب في الإطار، مثل محاولة شحن طلب ملغي.
+  if (err.message?.startsWith("Cannot change an order from")) return "لا يمكن نقل الطلب إلى هذه الحالة من حالته الحالية.";
+  if (err.status === 403) return "ليست لديك صلاحية لهذه العملية.";
   // 400 من مدقّق المدخلات: كل الحقول الخاطئة في سطر واحد، مثل "رقم الهاتف: صيغته غير صحيحة".
   if (err.status === 400 && Array.isArray(err.details) && err.details.length) {
     return err.details.map((d) => `${FIELD_LABELS[d.field] ?? d.field}: ${fieldMessage(d.message)}`).join(" — ");
@@ -204,7 +236,7 @@ export function productCard(p, quantity, categoryName) {
       <div class="body">
         ${categoryName ? `<span class="card-cat">${esc(categoryName)}</span>` : ""}
         <a class="name" href="${url}">${esc(p.name)}</a>
-        <div class="price">${priceHtml(p.price)}</div>
+        <div class="price">${priceTag(p.price, { off: soldOut })}</div>
         <button class="add-btn" data-add="${esc(p.id)}" ${soldOut ? "disabled" : ""}>
           ${soldOut ? "نفدت الكمية" : `${icon("cartPlus", 18)}<span>أضف إلى السلة</span>`}
         </button>
@@ -252,7 +284,7 @@ export function bindAddButtons(root) {
  */
 export function mountLayout(active) {
   const customer = getCustomer();
-  // المسجل دخوله يذهب إلى طلباته، والزائر إلى صفحة الدخول.
+  // المسجل دخوله يذهب إلى منطقة حسابه (طلباته)، والزائر إلى صفحة الدخول.
   const accountHref = customer ? "orders.html" : "account.html";
   const currentCategory = qs("category");
   const header = document.createElement("div");
@@ -291,11 +323,7 @@ export function mountLayout(active) {
     <div class="container footer-grid">
       <div class="footer-about">
         <img src="images/logo-light.svg" alt="${esc(STORE.name)}" class="footer-logo">
-        <p>${esc(STORE.tagline)} في ${esc(STORE.address)}. منتجات مختارة بأسعار مناسبة، وتوصيل لكل ليبيا.</p>
-        <div class="footer-badges">
-          <span>${icon("cash", 16)} الدفع عند الاستلام</span>
-          <span>${icon("truck", 16)} توصيل لكل المدن</span>
-        </div>
+        <p>${esc(STORE.tagline)} في ${esc(STORE.address)}. نوصّل لكل المدن الليبية، وتدفع نقداً عند الاستلام.</p>
       </div>
       <div><h4>الأقسام</h4><ul data-footer-cats></ul></div>
       <div><h4>خدمة العملاء</h4><ul>
@@ -310,8 +338,11 @@ export function mountLayout(active) {
       </ul></div>
     </div>
     <div class="footer-bottom"><div class="container">
-      <span>© ${new Date().getFullYear()} ${esc(STORE.name)} — جميع الحقوق محفوظة</span>
-      <span class="muted-light">صور المنتجات للعرض التوضيحي</span>
+      <span>© ${new Date().getFullYear()} ${esc(STORE.name)}. جميع الحقوق محفوظة. صور المنتجات للعرض التوضيحي.</span>
+      <nav aria-label="دخول الموظفين">
+        <a href="admin/login.html">لوحة المتجر</a>
+        <a href="courier/index.html">تطبيق المندوب</a>
+      </nav>
     </div></div>`;
   document.body.append(footer);
 

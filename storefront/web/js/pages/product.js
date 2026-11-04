@@ -1,7 +1,7 @@
 // صفحة المنتج (product.html?id=<رقم المنتج>): الصورة، والسعر، والمخزون، واختيار الكمية،
 // وزرّا "أضف إلى السلة" و"اشترِ الآن"، ومنتجات مشابهة من نفس القسم.
 import { api, addToCart, ApiError } from "../api.js";
-import { mountLayout, esc, stockBadge, priceHtml, errorText, toast, refreshCartBadge, qs, icon, productCard, bindAddButtons, getCategories } from "../ui.js";
+import { mountLayout, esc, stockBadge, priceTag, errorText, toast, refreshCartBadge, qs, icon, productCard, bindAddButtons, getCategories } from "../ui.js";
 
 mountLayout("product");
 const app = document.getElementById("app");
@@ -42,8 +42,8 @@ async function load() {
         <h1>${esc(product.name)}</h1>
         ${stockBadge(stock.quantity)}
         <div class="price-box">
-          <div class="price">${priceHtml(product.price)}</div>
-          <span class="muted">سعر التوصيل يُحسب حسب مدينتك عند إتمام الطلب</span>
+          ${priceTag(product.price, { large: true, off: stock.quantity <= 0 })}
+          <span class="muted">سعر التوصيل يُحسب حسب مدينتك عند إتمام الطلب، ومجاني فوق 500 د.ل</span>
         </div>
         ${product.description ? `<p class="desc">${esc(product.description)}</p>` : ""}
         ${stock.quantity > 0 ? `
@@ -54,7 +54,7 @@ async function load() {
             <button type="button" data-step="-1" aria-label="إنقاص">${icon("minus", 18)}</button>
           </div>
           <button class="btn btn-lg" data-add>${icon("cartPlus", 20)} أضف إلى السلة</button>
-          <button class="btn btn-dark btn-lg" data-buy-now>اشترِ الآن</button>
+          <button class="btn btn-outline btn-lg" data-buy-now>اشترِ الآن</button>
         </div>` : `<div class="alert error">نفدت الكمية حالياً. تابعنا، نعيد التوفير قريباً.</div>`}
         <ul class="perks">
           <li>${icon("truck", 22)}<div><b>توصيل لكل المدن الليبية</b><span>السعر حسب المدينة، ومجاني للطلبات فوق 500 د.ل</span></div></li>

@@ -1,6 +1,7 @@
 // اختبار شامل لموقع AMA في متصفح حقيقي (End-to-End): يشغّل متصفحاً من عائلة Chromium
 // (Edge أو Chrome أو Chromium) بلا واجهة (headless)، ويقوده في رحلة شراء كاملة عبر
-// بروتوكول أدوات المطوّر (DevTools Protocol)، دون أي مكتبة اختبار.
+// بروتوكول أدوات المطوّر (DevTools Protocol)، دون أي مكتبة اختبار. ثم رحلة المدير في لوحة
+// التحكم (تأكيد الطلب وتعيين مندوب)، ورحلة المندوب في تطبيقه (الاستلام والتسليم).
 // يلتقط صورة لكل صفحة، ويفشل عند أي خطأ JavaScript أو أي مخالفة لسياسة أمان المحتوى (CSP).
 //
 //   npm start            (في نافذة أخرى: الـ API والموقع يجب أن يعملا)
@@ -27,20 +28,30 @@ const API = process.env.API ?? `${new URL(SITE).protocol}//${new URL(SITE).hostn
 
 /**
  * يجد متصفحاً على الجهاز: من BROWSER_PATH إن ضُبط، وإلا يجرّب المسارات المعتادة.
- * في Windows يفحص وجود الملف، وفي Linux يسأل الطرفية بـ "command -v" إن كان الأمر موجوداً.
+ * في Windows و macOS يفحص وجود الملف، وفي Linux يسأل الطرفية بـ "command -v" إن كان الأمر موجوداً.
  */
 function findBrowser() {
   if (process.env.BROWSER_PATH) return process.env.BROWSER_PATH;
-  const candidates =
-    process.platform === "win32"
-      ? [
-          "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
-          "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
-          "C:/Program Files/Google/Chrome/Application/chrome.exe",
-        ]
-      : ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge"];
-  for (const c of candidates) {
-    if (process.platform === "win32" ? existsSync(c) : (() => { try { return execSync(`command -v ${c}`, { stdio: "pipe" }).length > 0; } catch { return false; } })()) return c;
+  const files = {
+    win32: [
+      "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+      "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
+      "C:/Program Files/Google/Chrome/Application/chrome.exe",
+    ],
+    darwin: [
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+      "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    ],
+  }[process.platform];
+  if (files) {
+    const found = files.find((f) => existsSync(f));
+    if (found) return found;
+  }
+  for (const c of ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge"]) {
+    try {
+      if (execSync(`command -v ${c}`, { stdio: "pipe" }).length > 0) return c;
+    } catch {}
   }
   throw new Error("No Edge/Chrome/Chromium found - set BROWSER_PATH to your browser executable.");
 }
@@ -253,7 +264,54 @@ try {
   await waitFor(`document.querySelectorAll(".card").length >= 16`, "mobile home");
   await shot("8-mobile", false);
 
-  // 10. الأمان: منتج اسمه يحتوي HTML يجب أن يظهر نصاً، ولا يُنفَّذ أبداً كـ HTML (حماية من XSS).
+  // 10. المدير: يدخل لوحة التحكم بالحساب التجريبي (من npm run seed)، ويؤكد طلب الضيف من الخطوة 6،
+  //     ويعيّن له المندوب "أحمد سالم". ثم 11. المندوب: يدخل تطبيقه، ويستلم الطلب ويسلّمه.
+  //     confirm() في الصفحة نجعلها توافق تلقائياً، فالمتصفح بلا واجهة لا يستطيع الضغط على "موافق".
+  await send("Emulation.clearDeviceMetricsOverride");
+  await go("/admin/login.html");
+  await waitFor(`document.querySelector("[data-form]")`, "admin login form");
+  await evaluate(`(() => { const f=document.querySelector("[data-form]"); f.email.value="admin@ama.ly"; f.password.value="Ama@admin2026"; f.requestSubmit(); })()`);
+  await waitFor(`document.querySelectorAll(".kpi").length === 5 || document.querySelector("[data-error] .alert")`, "admin dashboard or login error");
+  if (await evaluate(`Boolean(document.querySelector("[data-error] .alert"))`)) {
+    log("admin/courier journeys skipped: demo staff accounts not found (run npm run seed)");
+  } else {
+    log(`admin dashboard: ${await evaluate(`document.querySelectorAll(".kpi").length`)} KPIs, chart bars: ${await evaluate(`document.querySelectorAll(".chart .bar").length`)}`);
+    await shot("9-admin-dashboard");
+    await go(`/admin/order.html?id=${orderId}`);
+    await waitFor(`document.querySelector('[data-status="confirmed"]')`, "confirm button");
+    await evaluate(`document.querySelector('[data-status="confirmed"]').click()`);
+    await waitFor(`document.querySelector("[data-assign]")`, "assign courier form");
+    await evaluate(`(() => { const f=document.querySelector("[data-assign]"); f.courierId.value=[...f.courierId.options].find(o=>o.textContent.includes("أحمد")).value; f.requestSubmit(); })()`);
+    await waitFor(`document.querySelector("[data-unassign]")`, "courier assigned");
+    log(`admin: order confirmed and assigned to "${await evaluate(`[...document.querySelectorAll(".box-head")].find(h => h.textContent.includes("التوصيل")).querySelector(".muted").textContent`)}"`);
+    await shot("10-admin-order");
+
+    await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+    await evaluate(`localStorage.removeItem("ama.staff")`);
+    await go("/courier/index.html");
+    await waitFor(`document.querySelector("[data-login]")`, "courier login");
+    await evaluate(`(() => { const f=document.querySelector("[data-login]"); f.email.value="ahmed@ama.ly"; f.password.value="Ama@courier2026"; f.requestSubmit(); })()`);
+    const card = `document.querySelector('.c-card[data-order="${orderId}"]')`;
+    await waitFor(card, "delivery card in courier app");
+    log(`courier: card shows "${await evaluate(`${card}.querySelector(".c-cash").textContent.replace(/\s+/g," ").trim()`)}"`);
+    await shot("11-courier");
+    await evaluate(`${card}.querySelector("[data-pickup]").click()`);
+    await waitFor(`${card}?.querySelector("[data-deliver]")`, "deliver button after pickup");
+    await evaluate(`window.confirm = () => true; ${card}.querySelector("[data-deliver]").click()`);
+    await waitFor(`!${card}`, "card leaves the active list after delivery");
+    log(`courier: delivered, header stats: ${await evaluate(`document.querySelector("[data-stats]").textContent.replace(/\s+/g," ").trim()`)}`);
+
+    // 12. الضيف يرى في صفحة التتبع: تم التوصيل، والدفع مدفوع، والسجل كاملاً.
+    //     نخرج من حساب الزبون (الخطوة 8) أولاً: قاعدة الإطار في GET /orders/:id تعطي الزبون المسجل
+    //     طلباته هو فقط، ولا تجرّب رقم الهاتف معه، فلا يستطيع تتبّع طلب ضيف وهو مسجل الدخول.
+    await evaluate(`localStorage.removeItem("ama.token"); localStorage.removeItem("ama.customer")`);
+    await go(`/track.html?id=${orderId}&phone=0913334455`);
+    await waitFor(`document.querySelector(".order-card .status.delivered")`, "tracked order delivered");
+    log(`track after delivery: status="${await evaluate(`document.querySelector(".status").textContent`)}", history entries: ${await evaluate(`document.querySelectorAll(".timeline li").length`)}, payment: ${await evaluate(`document.querySelector(".order-meta b").textContent`)}`);
+    await send("Emulation.clearDeviceMetricsOverride");
+  }
+
+  // 13. الأمان: منتج اسمه يحتوي HTML يجب أن يظهر نصاً، ولا يُنفَّذ أبداً كـ HTML (حماية من XSS).
   //     ننشئ منتج الفحص بمفتاح المالك، ونحذفه بعد الفحص مهما كانت النتيجة (finally).
   //     إن نُفّذ الاسم كـ HTML، لظهر عنصر img بمصدر "x"، ولضبط onerror المتغير window.__xss.
   if (OWNER_KEY) {
@@ -272,6 +330,17 @@ try {
         ran: window.__xss === 1, asText: document.querySelector(".card .name").textContent.includes("<img") })`);
       log(`XSS check: markup injected=${r.markup}, script ran=${r.ran}, name shown as text=${r.asText}`);
       if (r.markup || r.ran || !r.asText) throw new Error("XSS: a product name was rendered as HTML");
+      // نفس الفحص في جدول المنتجات بلوحة التحكم (يحتاج جلسة مدير من الخطوة 10).
+      const adminLogin = await fetch(`${API}/staff/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "admin@ama.ly", password: "Ama@admin2026" }) });
+      if (adminLogin.ok) {
+        const { token, staff } = await adminLogin.json();
+        await evaluate(`localStorage.setItem("ama.staff", ${JSON.stringify(JSON.stringify({ token, staff: { id: staff.id, name: staff.name, role: staff.role } }))})`);
+        await go("/admin/products.html");
+        await waitFor(`[...document.querySelectorAll("[data-rows] .row-link")].some(a => a.textContent.includes("xss-probe"))`, "XSS probe row in admin");
+        const a = await evaluate(`({ markup: document.querySelectorAll("[data-rows] img[src='x']").length, ran: window.__xss === 1 })`);
+        log(`XSS check (admin products): markup injected=${a.markup}, script ran=${a.ran}`);
+        if (a.markup || a.ran) throw new Error("XSS: a product name was rendered as HTML in the admin panel");
+      }
     } finally {
       await fetch(`${API}/products/${probe.id}`, { method: "DELETE", headers: ownerHeaders });
     }

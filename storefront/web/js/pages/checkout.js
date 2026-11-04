@@ -50,13 +50,13 @@ async function load() {
       <form class="panel" novalidate data-form>
         ${me ? "" : `<div class="alert info">تشتري كضيف. <a href="account.html?next=checkout.html"><u>سجّل الدخول</u></a> لتتابع طلباتك من حسابك (اختياري).</div>`}
         <div data-form-error></div>
-        <h3>بيانات المستلم</h3>
+        <h3 class="form-step"><span class="n">1</span> بيانات المستلم</h3>
         <div class="field"><label for="name">الاسم الكامل</label>
           <input id="name" name="contactName" autocomplete="name" value="${esc(me?.name ?? "")}" required><div class="error"></div></div>
         <div class="field"><label for="phone">رقم الهاتف</label>
           <input id="phone" name="contactPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="09XXXXXXXX" class="ltr" value="${esc(me?.phone ?? "")}" required><div class="error"></div></div>
 
-        <h3>طريقة الاستلام</h3>
+        <h3 class="form-step"><span class="n">2</span> طريقة الاستلام</h3>
         <div class="options">
           ${methods.map((m, i) => `
             <label class="option"><input type="radio" name="shippingMethod" value="${esc(m.id)}" ${i === 0 ? "checked" : ""}>
@@ -69,12 +69,13 @@ async function load() {
             <textarea id="address" name="shippingAddress" rows="2" placeholder="المنطقة، الشارع، أقرب معلم"></textarea><div class="error"></div></div>
         </div>
 
-        <h3>طريقة الدفع</h3>
+        <h3 class="form-step"><span class="n">3</span> طريقة الدفع</h3>
         <div class="options">
           ${payments.map((p, i) => `
             <label class="option"><input type="radio" name="paymentMethod" value="${esc(p.id)}" ${i === 0 ? "checked" : ""}><b>${esc(p.name)}</b></label>`).join("")}
         </div>
-        <button class="btn btn-block" type="submit" data-submit>تأكيد الطلب</button>
+        <button class="btn btn-lg btn-block" type="submit" data-submit>تأكيد الطلب</button>
+        <p class="muted">بالضغط على "تأكيد الطلب" يصلنا طلبك، ونتصل بك على رقمك لتأكيده قبل التوصيل.</p>
       </form>
 
       <aside class="panel summary">
@@ -247,6 +248,7 @@ function showSuccess(order) {
       <p><b>الإجمالي: ${money(order.total)}</b>${order.shippingCity ? ` — التوصيل إلى ${esc(order.shippingCity)}` : ""}</p>
       ${order.payment?.instructions ? `<div class="alert info">${esc(order.payment.instructions)}</div>` : ""}
       <a class="btn" href="${trackUrl}">تتبّع الطلب</a>
+      ${getToken() ? `<a class="btn btn-outline" href="orders.html">طلباتي</a>` : ""}
       <a class="btn btn-light" href="index.html">متابعة التسوق</a>
     </div>`;
 }

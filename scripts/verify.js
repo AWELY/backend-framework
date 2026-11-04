@@ -10,7 +10,8 @@
  *   2. الاختبارات    : كل اختبارات الوحدة والتكامل (على PostgreSQL حقيقية).
  *   3. أداة CLI      : إنشاء متجر جديد، ثم تثبيته، ثم migrate، ثم تشغيله، ثم استدعاؤه.
  *   4. المتجر التجريبي: migrate، ثم البيانات الأولية، ثم التشغيل، ثم سيناريو الشراء ذو الـ 16 خطوة.
- *   5. متجر AMA      : الـ API والموقع: الصفحات، وترويسات الأمان، والصور، والمدن، و CORS.
+ *   5. متجر AMA      : الـ API والموقع ولوحة التحكم وتطبيق المندوب: الصفحات، وترويسات الأمان،
+ *                      والصور، والمدن، و CORS، ودخول الموظفين وصلاحياتهم.
  *
  * كل خطوة تستخدم قاعدة البيانات تستخدم TEST_DATABASE_URL (وتُمسح)، وليس بيانات التطوير أبداً.
  * المجلدات المؤقتة تُحذف في النهاية، نجح الفحص أو فشل.
@@ -19,7 +20,7 @@
 
 require("dotenv").config({ quiet: true });
 const { spawn, spawnSync } = require("node:child_process");
-const { existsSync, rmSync } = require("node:fs");
+const { existsSync, rmSync, readdirSync } = require("node:fs");
 const { join, resolve } = require("node:path");
 const net = require("node:net");
 const { randomBytes } = require("node:crypto");
@@ -235,11 +236,27 @@ async function main() {
   });
 }
 
+/** كل ملفات .js في مجلد وما تحته (لفحص صياغة كل سكربتات الموقع، مهما أُضيف منها). */
+function jsFiles(dir) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? jsFiles(join(dir, e.name)) : e.name.endsWith(".js") ? [join(dir, e.name)] : []
+  );
+}
+
+// صفحات المتجر، ثم لوحة التحكم، ثم تطبيق المندوب. كلها يجب أن ترد 200 ومعها CSP.
+const STORE_PAGES = [
+  "index", "product", "cart", "checkout", "account", "orders", "track",
+  "admin/login", "admin/index", "admin/orders", "admin/order", "admin/products", "admin/product",
+  "admin/categories", "admin/customers", "admin/staff",
+  "courier/index",
+];
+
 /**
  * الخطوة 5: متجر AMA (الـ API والموقع معاً، على منافذ فارغة وقاعدة الاختبار).
- * يفحص: الصفحات السبع ترد 200 ومعها CSP، والسكربتات بنوعها الصحيح، وعدم تسرب .env،
+ * يفحص: كل الصفحات ترد 200 ومعها CSP، والسكربتات بنوعها الصحيح، وعدم تسرب .env،
  * وصورة كل منتج موجودة فعلاً، والتوصيل حسب المدينة (ومنها تاجوراء)، وطلب CORS التمهيدي،
- * وأن كل سكربتات الموقع خالية من أخطاء الصياغة (node --check).
+ * ودخول المدير والمندوب التجريبيين وأن صلاحياتهما منفصلة، وأن كل سكربتات الموقع خالية من
+ * أخطاء الصياغة (node --check).
  */
 async function storefrontStep() {
   const storeDir = join(ROOT, "storefront");
@@ -268,7 +285,7 @@ async function storefrontStep() {
     web = await startServer("web-server.js", storeDir, env, `${origin}/index.html`);
 
     // كل صفحة ترد 200، ومعها سياسة أمان المحتوى.
-    for (const page of ["index", "product", "cart", "checkout", "account", "orders", "track"]) {
+    for (const page of STORE_PAGES) {
       const res = await fetch(`${origin}/${page}.html`);
       if (res.status !== 200) throw new Error(`${page}.html -> ${res.status}`);
       if (!(res.headers.get("content-security-policy") ?? "").includes("script-src 'self'")) {
@@ -303,13 +320,30 @@ async function storefrontStep() {
       throw new Error(`CORS preflight failed: ${preflight.status} ${preflight.headers.get("access-control-allow-origin")}`);
     }
 
+    // الموظفون (إضافات المتجر): المدير والمندوب التجريبيان من seed يدخلان، والمدير يقرأ التقارير
+    // ومسارات الإطار، والمندوب لا يصل إلا لتوصيلاته (403 على الطلبات والتقارير).
+    const login = async (email, password) => {
+      const res = await fetch(`${api.base}/staff/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, password }) });
+      if (res.status !== 200) throw new Error(`staff login ${email} -> ${res.status}`);
+      return { authorization: `Bearer ${(await res.json()).token}` };
+    };
+    const admin = await login("admin@ama.ly", "Ama@admin2026");
+    const courier = await login("ahmed@ama.ly", "Ama@courier2026");
+    const expect = async (path, headers, status) => {
+      const res = await fetch(`${api.base}${path}`, { headers });
+      if (res.status !== status) throw new Error(`${path} -> ${res.status}, expected ${status}`);
+    };
+    await expect("/admin/summary", admin, 200);
+    await expect("/orders", admin, 200);
+    await expect("/courier/deliveries", courier, 200);
+    await expect("/orders", courier, 403);
+    await expect("/admin/summary", courier, 403);
+
     // node --check يفحص صياغة كل سكربت في الموقع دون تشغيله.
-    const scripts = ["config", "store", "api", "ui", "icons", "order-view"]
-      .map((f) => join(storeDir, "web", "js", `${f}.js`))
-      .concat(["home", "product", "cart", "checkout", "account", "orders", "track"].map((f) => join(storeDir, "web", "js", "pages", `${f}.js`)));
+    const scripts = jsFiles(join(storeDir, "web", "js"));
     for (const file of scripts) run(process.execPath, ["--check", file], storeDir);
 
-    return `${products.length} products with photos, 7 pages with CSP, ${cityRate.cities.length} delivery cities, CORS preflight OK, ${scripts.length} scripts valid`;
+    return `${products.length} products with photos, ${STORE_PAGES.length} pages with CSP, ${cityRate.cities.length} delivery cities, CORS preflight OK, staff roles OK, ${scripts.length} scripts valid`;
   } finally {
     await stopServer(api);
     await stopServer(web);

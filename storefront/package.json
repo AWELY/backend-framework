@@ -10,6 +10,7 @@
     "setup": "node setup-env.js",
     "migrate": "node api/migrate.js",
     "seed": "node api/seed.js",
+    "create-staff": "node api/create-staff.js",
     "api": "node api/index.js",
     "web": "node web-server.js",
     "start": "node start.js",

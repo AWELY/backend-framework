@@ -1,10 +1,10 @@
-// الصفحة الرئيسية (index.html): الواجهة، والأقسام، وشبكة المنتجات، والبحث، والترتيب.
+// الصفحة الرئيسية (index.html): الواجهة، والأقسام، وشبكة المنتجات، والبحث، والترتيب، وخطوات الطلب.
 // نفس الصفحة تعرض ثلاث حالات حسب الرابط:
-//   index.html                  الرئيسية الكاملة (واجهة + مزايا + أقسام + كل المنتجات)
+//   index.html                  الرئيسية الكاملة (واجهة + أقسام + كل المنتجات + خطوات الطلب)
 //   index.html?category=<id>    منتجات قسم واحد
 //   index.html?q=<كلمة>         نتائج البحث
 import { api } from "../api.js";
-import { mountLayout, esc, errorText, qs, icon, productCard, bindAddButtons, getCategories } from "../ui.js";
+import { mountLayout, esc, errorText, qs, icon, productCard, bindAddButtons, getCategories, priceTag } from "../ui.js";
 
 // الرأس والتذييل المشتركان، و "home" لتمييز رابط "كل المنتجات".
 mountLayout("home");
@@ -22,10 +22,12 @@ const SORTS = {
 };
 
 async function load() {
-  // طلبان في نفس الوقت (Promise.all) بدل واحد بعد الآخر: الأقسام والمنتجات.
-  const [categories, products] = await Promise.all([
+  // ثلاثة طلبات في نفس الوقت (Promise.all) بدل واحد بعد الآخر: الأقسام، والمنتجات، وخيارات
+  // الشراء (منها عدد مدن التوصيل في الواجهة). فشل الأخير لا يوقف الصفحة: catch ترجع null.
+  const [categories, products, options] = await Promise.all([
     getCategories(),
     api(`/products?limit=100${categoryId ? `&categoryId=${encodeURIComponent(categoryId)}` : ""}`),
+    api("/checkout/options").catch(() => null),
   ]);
 
   // الـ API يصفّي حسب القسم. أما البحث النصي فيحدث هنا في المتصفح، في الأسماء والأوصاف.
@@ -47,9 +49,12 @@ async function load() {
   const title = search ? `نتائج البحث عن "${esc(search)}"` : current ? esc(current.name) : "كل المنتجات";
   const isHome = !search && !current;
 
-  // الرئيسية تعرض الواجهة والمزايا والأقسام، وصفحة القسم أو البحث تعرض مسار التنقل بدلها.
+  // الواجهة شريط بعرض الشاشة كلها، فتوضع قبل <main class="container"> لا داخله.
+  if (isHome) app.insertAdjacentHTML("beforebegin", hero(products, stock, options));
+
+  // الرئيسية تعرض الأقسام وخطوات الطلب، وصفحة القسم أو البحث تعرض مسار التنقل بدلها.
   app.innerHTML = `
-    ${isHome ? hero() + trustBar() + categoryTiles(categories, products) : `
+    ${isHome ? categoryTiles(categories, products) : `
     <nav class="breadcrumb"><a href="index.html">الرئيسية</a> / ${search ? "البحث" : esc(current.name)}</nav>`}
     <section class="section" id="products">
       <div class="section-head">
@@ -68,7 +73,8 @@ async function load() {
       ${shown.length === 0
         ? `<div class="empty panel"><div class="big">لا توجد منتجات مطابقة</div><p>جرّب كلمة أخرى أو تصفّح الأقسام.</p><a class="btn btn-light" href="index.html">عرض كل المنتجات</a></div>`
         : `<div class="grid" data-grid></div>`}
-    </section>`;
+    </section>
+    ${isHome ? howToOrder() : ""}`;
 
   // يرسم بطاقات المنتجات بالترتيب المختار، ثم يربط أزرار "أضف إلى السلة".
   // [...shown] نسخة، لأن sort تعدّل المصفوفة الأصلية. اسم القسم لا يُعرض داخل صفحة القسم نفسه.
@@ -84,39 +90,65 @@ async function load() {
   app.querySelector("[data-sort]")?.addEventListener("change", (e) => renderGrid(e.target.value));
 }
 
-/** الواجهة الكبيرة أعلى الرئيسية: العنوان والوصف وزرّان وصور منتجات. */
-function hero() {
+/**
+ * الواجهة أعلى الرئيسية: شريط كحلي بعرض الشاشة. يمين: العنوان والأزرار وحقائق المتجر.
+ * يسار: "رف" فيه ثلاثة منتجات حقيقية من الكتالوج (لا صور ثابتة)، تحت كل منها ملصق سعرها.
+ *
+ * أي المنتجات؟ الأغلى المتوفر من كل قسم، لأول ثلاثة أقسام فيها منتج متوفر بصورة. هكذا يتغير
+ * الرف وحده عندما يضيف المدير منتجات أو تنفد كمية، دون تعديل هذا الملف.
+ * عدد مدن التوصيل يأتي من إضافة الشحن في الـ API (GET /checkout/options).
+ */
+function hero(products, stock, options) {
+  const byCategory = new Map();
+  for (const p of products) {
+    if (!p.imageUrl || (stock.get(p.id) ?? 0) <= 0) continue;
+    const best = byCategory.get(p.categoryId);
+    if (!best || p.price > best.price) byCategory.set(p.categoryId, p);
+  }
+  const shelf = [...byCategory.values()].slice(0, 3);
+  const cities = options?.shippingMethods.find((m) => m.cities)?.cities.length;
   return `
-    <section class="hero">
+    <section class="hero-band"><div class="container">
       <div class="hero-text">
-        <span class="eyebrow">${icon("pin", 16)} متجر AMA — تاجوراء، طرابلس</span>
-        <h1>كل ما يحتاجه هاتفك <span class="accent">في مكان واحد</span></h1>
-        <p>شواحن، كوابل، سماعات، ساعات ذكية وباور بانك بأسعار مناسبة. نوصّل لكل المدن الليبية، وتدفع عند الاستلام.</p>
+        <h1>إكسسوارات هاتفك، من محلنا في تاجوراء إلى باب بيتك</h1>
+        <p>شواحن وسماعات وساعات ذكية وباور بانك. اطلب من الموقع، نتصل بك للتأكيد، ويصلك الطلب مع مندوبنا وتدفع نقداً عند الاستلام.</p>
         <div class="hero-actions">
-          <a class="btn btn-lg" href="#products">تسوّق الآن ${icon("arrow", 18)}</a>
+          <a class="btn btn-lg" href="#products">تصفّح المنتجات</a>
           <a class="btn btn-ghost btn-lg" href="track.html">تتبّع طلبك</a>
         </div>
+        <ul class="facts">
+          <li>${icon("truck", 18)} توصيل إلى ${cities ? `<b>${cities}</b> مدينة` : "كل المدن"}</li>
+          <li>${icon("cash", 18)} الدفع عند الاستلام</li>
+          <li>${icon("store", 18)} استلام مجاني من المحل</li>
+        </ul>
       </div>
-      <div class="hero-art" aria-hidden="true">
-        <img class="hero-main" src="images/products/anc-headphones.webp" alt="">
-        <img class="hero-side one" src="images/products/fitness-band.webp" alt="">
-        <img class="hero-side two" src="images/products/silicone-case.webp" alt="">
-        <div class="hero-chip">${icon("gift", 18)} توصيل مجاني فوق 500 د.ل</div>
-      </div>
-    </section>`;
+      ${shelf.length === 3 ? `
+      <div class="shelf">${shelf.map((p) => `
+        <a class="shelf-item" href="product.html?id=${encodeURIComponent(p.id)}">
+          <span class="ph"><img src="${esc(p.imageUrl)}" alt="${esc(p.name)}"></span>
+          <span class="nm">${esc(p.name)}</span>
+          ${priceTag(p.price)}
+        </a>`).join("")}
+      </div>` : ""}
+    </div></section>`;
 }
 
-/** شريط المزايا الأربع (التوصيل، والدفع عند الاستلام، والاستلام من المحل، والتوصيل المجاني). */
-function trustBar() {
-  // كل عنصر: [اسم الأيقونة، العنوان، السطر الصغير].
-  const items = [
-    ["truck", "توصيل لكل ليبيا", "من تاجوراء لكل المدن"],
-    ["cash", "الدفع عند الاستلام", "ادفع نقداً للمندوب"],
-    ["store", "استلام من المحل", "مجاناً من فرعنا في تاجوراء"],
-    ["gift", "توصيل مجاني", "للطلبات فوق 500 د.ل"],
+/**
+ * خطوات الطلب: تسلسل حقيقي (ولهذا مرقّمة)، يشرح للمشتري الجديد كيف يعمل الدفع عند الاستلام.
+ * الأرقام يرسمها CSS (counter في .how)، فتبقى صحيحة إن أُضيفت خطوة أو حُذفت.
+ */
+function howToOrder() {
+  const steps = [
+    ["اطلب من الموقع", "أضف المنتجات للسلة واختر مدينتك. لا تحتاج حساباً."],
+    ["نتصل بك للتأكيد", "نراجع الطلب ونتصل على رقمك خلال ساعات العمل."],
+    ["يصلك مع المندوب", "تتابع كل مرحلة من صفحة تتبّع الطلب."],
+    ["ادفع عند الاستلام", "نقداً للمندوب بعد أن ترى طلبك، أو في المحل."],
   ];
-  return `<section class="trust">${items.map(([i, t, s]) =>
-    `<div class="trust-item"><span class="trust-icon">${icon(i, 24)}</span><div><b>${t}</b><span>${s}</span></div></div>`).join("")}</section>`;
+  return `
+    <section class="how" aria-labelledby="how-title">
+      <h2 id="how-title">كيف تطلب من AMA</h2>
+      <ol>${steps.map(([t, d]) => `<li><div><b>${t}</b><span>${d}</span></div></li>`).join("")}</ol>
+    </section>`;
 }
 
 /**
@@ -138,7 +170,7 @@ function categoryTiles(categories, products) {
       <div class="cat-grid">${tiles.map(({ c, count, image }) => `
         <a class="cat-tile" href="index.html?category=${encodeURIComponent(c.id)}#products">
           <span class="cat-img">${image ? `<img src="${esc(image)}" alt="" loading="lazy">` : ""}</span>
-          <b>${esc(c.name)}</b><span class="muted">${count} منتج</span>
+          <span><b>${esc(c.name)}</b><br><span class="muted">${count} منتج</span></span>
         </a>`).join("")}</div>
     </section>`;
 }

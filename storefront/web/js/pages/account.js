@@ -1,8 +1,9 @@
-// صفحة الحساب (account.html): الدخول، وإنشاء حساب جديد، وعرض الملف الشخصي والخروج.
+// صفحة الحساب (account.html): الدخول، وإنشاء حساب جديد، و"بياناتي" (تعديل الاسم والهاتف) للمسجل.
 // الحساب اختياري: الضيف يستطيع الشراء وتتبع طلبه دون حساب.
 import { api } from "../api.js";
-import { getToken, saveSession, clearSession } from "../store.js";
-import { mountLayout, esc, errorText, qs } from "../ui.js";
+import { getToken, saveSession, updateSessionCustomer } from "../store.js";
+import { mountLayout, esc, errorText, qs, toast } from "../ui.js";
+import { accountShell } from "../account-shell.js";
 
 mountLayout("account");
 const app = document.getElementById("app");
@@ -23,21 +24,52 @@ async function render() {
   renderForms("login");
 }
 
-/** الملف الشخصي، وزر الخروج يمسح الجلسة من المتصفح ويعود إلى الرئيسية. */
+// نفس قاعدة الهاتف في الـ API، لرسالة فورية قبل الإرسال (الخادم يفحص مرة أخرى دائماً).
+const PHONE = /^\+?[0-9][0-9 ()-]{5,29}$/;
+
+/**
+ * "بياناتي": الاسم والهاتف قابلان للتعديل (PATCH /customers/me في الإطار)، والبريد للعرض فقط
+ * (الإطار لا يسمح بتغييره من هذا المسار). الهاتف المحفوظ هنا يُملأ تلقائياً عند إتمام الطلب.
+ */
 function renderProfile(me) {
-  app.innerHTML = `
-    <h1 class="page-title">حسابي</h1>
-    <div class="panel narrow">
-      <p><b>الاسم:</b> ${esc(me.name)}</p>
-      <p><b>البريد الإلكتروني:</b> <span class="ltr">${esc(me.email)}</span></p>
-      <p><b>الهاتف:</b> <span class="ltr">${esc(me.phone ?? "—")}</span></p>
-      <a class="btn btn-block" href="orders.html">طلباتي</a>
-      <p></p>
-      <button class="btn btn-light btn-block" data-logout>تسجيل الخروج</button>
-    </div>`;
-  app.querySelector("[data-logout]").addEventListener("click", () => {
-    clearSession();
-    location.href = "index.html";
+  const content = accountShell(app, "profile", me, "بياناتي");
+  content.innerHTML = `
+    <form class="panel" data-profile novalidate>
+      <div data-error></div>
+      <div class="field"><label>البريد الإلكتروني</label><input class="ltr" value="${esc(me.email)}" disabled>
+        <span class="hint">البريد هو اسم الدخول، ولا يمكن تغييره.</span></div>
+      <div class="field"><label for="name">الاسم الكامل</label><input id="name" name="name" autocomplete="name" value="${esc(me.name)}" required></div>
+      <div class="field"><label for="phone">رقم الهاتف</label><input id="phone" name="phone" type="tel" class="ltr" placeholder="09XXXXXXXX" autocomplete="tel" value="${esc(me.phone ?? "")}">
+        <span class="hint">نستخدمه لتأكيد طلباتك، ويُملأ تلقائياً عند الشراء.</span></div>
+      <button class="btn">حفظ التغييرات</button>
+    </form>`;
+  const form = content.querySelector("[data-profile]");
+  const showError = (message) => {
+    form.querySelector("[data-error]").innerHTML = message ? `<div class="alert error">${esc(message)}</div>` : "";
+  };
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    showError(null);
+    const name = form.name.value.trim();
+    const phone = form.phone.value.trim();
+    if (!name) return showError("الاسم مطلوب.");
+    if (phone && !PHONE.test(phone)) return showError("أدخل رقم هاتف صحيح، مثال: 0912345678");
+    // نرسل الهاتف فقط إن كُتب: الـ API يرفض الحقل الفارغ (صيغته غير صحيحة).
+    const body = phone ? { name, phone } : { name };
+    const button = form.querySelector("button");
+    button.disabled = true;
+    try {
+      const updated = await api("/customers/me", { method: "PATCH", body });
+      // الاسم الجديد يظهر في الرأس وفي القائمة الجانبية بعد إعادة الرسم.
+      updateSessionCustomer(updated);
+      const headerName = document.querySelector('.nav a[href="orders.html"] .label');
+      if (headerName) headerName.textContent = updated.name;
+      toast("تم حفظ بياناتك");
+      renderProfile(updated);
+    } catch (err) {
+      showError(errorText(err));
+      button.disabled = false;
+    }
   });
 }
 

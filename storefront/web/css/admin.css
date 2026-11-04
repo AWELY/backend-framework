@@ -1,0 +1,251 @@
+/*
+ * تنسيق لوحة التحكم (web/admin) وتطبيق المندوب (web/courier).
+ * يُحمَّل بعد styles.css، فيستخدم نفس المتغيرات (الألوان والخطوط) والأزرار والحقول والتنبيهات.
+ *
+ * فكرة التصميم:
+ *   - اللوحة أداة عمل يومية: كثيفة وهادئة. قائمة جانبية كحلية على اليمين (بداية الصفحة في RTL)،
+ *     والمحتوى على خلفية رمادية فاتحة، والجداول بأرقام بعرض ثابت لتصطف الأعمدة.
+ *   - البرتقالي يبقى للفعل الرئيسي فقط (تأكيد، حفظ، تعيين)، كما في المتجر.
+ *   - تطبيق المندوب للهاتف في اليد أثناء القيادة: أزرار كبيرة (48px على الأقل)، ونص كبير،
+ *     والمبلغ المطلوب تحصيله أوضح شيء في البطاقة.
+ */
+
+/* ---------- الهيكل: القائمة الجانبية والمحتوى ---------- */
+.admin { display: grid; min-height: 100vh; grid-template-columns: 1fr; }
+.side {
+  background: var(--navy); color: #c3cee0; display: flex; flex-direction: column; gap: 6px; padding: 18px 14px;
+  position: fixed; inset: 0 0 0 auto; width: 260px; z-index: 60; transform: translateX(100%); transition: transform 0.2s;
+}
+/* على الهاتف القائمة مخفية خارج الشاشة، وزر القائمة يضيف .open فتنزلق للداخل. */
+.side.open { transform: none; box-shadow: var(--shadow-pop); }
+.side-brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); margin-bottom: 8px; }
+.side-brand img { height: 32px; width: auto; }
+.side-brand span { font-family: var(--font-display); color: #fff; font-weight: 500; font-size: 15px; }
+.side-nav { display: flex; flex-direction: column; gap: 2px; }
+.side-nav a { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: var(--radius-sm); font-weight: 500; font-size: 15px; }
+.side-nav a:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+.side-nav a.active { background: rgba(255, 255, 255, 0.1); color: #fff; box-shadow: inset -3px 0 0 var(--orange); }
+.side-nav .count {
+  margin-inline-start: auto; background: var(--orange); color: #fff; border-radius: 999px; min-width: 22px; height: 22px; padding: 0 7px;
+  font-family: var(--font-display); font-size: 12px; display: inline-grid; place-items: center;
+}
+.side-foot { margin-top: auto; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 12px; display: flex; flex-direction: column; gap: 2px; }
+.side-foot .me { padding: 4px 12px 10px; }
+.side-foot .me b { display: block; color: #fff; font-weight: 600; }
+.side-foot .me span { font-size: 13px; }
+.side-foot a, .side-foot button { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--radius-sm); background: none; border: 0; color: inherit; cursor: pointer; font-size: 14px; text-align: start; }
+.side-foot a:hover, .side-foot button:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+.scrim { position: fixed; inset: 0; background: rgba(11, 31, 58, 0.4); z-index: 55; }
+
+.admin-main { min-width: 0; display: flex; flex-direction: column; }
+.admin-top {
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--card); border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 30;
+}
+.admin-top h1 { margin: 0; font-size: var(--fs-lg); flex: 1; min-width: 0; }
+.admin-top .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.menu-btn { border: 0; background: var(--surface); border-radius: var(--radius-sm); width: 40px; height: 40px; display: grid; place-items: center; cursor: pointer; color: var(--navy); }
+.admin-content { padding: 20px 16px 48px; display: grid; gap: 20px; align-content: start; }
+
+/* ---------- أرقام الملخص (Stat tiles) ---------- */
+/* رقم كبير بخط Readex، وعنوان فوقه، وسطر صغير تحته. بلا تدرجات ولا أيقونات زخرفية. */
+.kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.kpi { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 2px; }
+.kpi .label { color: var(--muted); font-size: var(--fs-sm); }
+.kpi .value { font-family: var(--font-display); font-variant-numeric: tabular-nums; font-size: 26px; font-weight: 600; line-height: 1.3; }
+.kpi .value small { font-size: 14px; font-weight: 500; color: var(--muted); }
+.kpi .sub { color: var(--muted); font-size: 13px; }
+.kpi.attention { border-color: var(--orange); box-shadow: inset 0 3px 0 var(--orange); }
+a.kpi:hover { border-color: var(--line-strong); }
+
+/* ---------- البطاقات (لوحات المحتوى) والشبكات ---------- */
+.box { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; }
+.box-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.box-head h2 { margin: 0; font-size: 17px; }
+.box-head a { color: var(--blue); font-size: var(--fs-sm); font-weight: 500; }
+.box-body { padding: 16px; }
+.cols { display: grid; gap: 20px; align-items: start; }
+/* عمود فيه عدة بطاقات فوق بعضها (داخل .cols). */
+.stack { display: grid; gap: 20px; align-content: start; min-width: 0; }
+
+/* ---------- الرسم البياني للمبيعات اليومية (SVG يبنيه dashboard.js) ---------- */
+/*
+ * سلسلة واحدة، فلا مفتاح ألوان: العنوان يسميها. الأعمدة بلون واحد (--blue، نجح في فحص الألوان)،
+ * بعرض أقصى 24px وزاوية 4px في الطرف العلوي فقط، وتبدأ من خط أساس واحد. النصوص بألوان النص
+ * لا بلون العمود. الشبكة خفيفة جداً. التلميح (tooltip) يظهر عند المرور أو التركيز بلوحة المفاتيح.
+ */
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart .grid-line { stroke: var(--line); stroke-width: 1; }
+.chart .axis-text { fill: var(--muted); font-size: 11px; font-family: var(--font-display); }
+.chart .bar { fill: var(--blue); }
+.chart .hit { fill: transparent; cursor: default; outline: none; }
+.chart .hit:hover + .bar, .chart .hit:focus + .bar { fill: #3a76d4; }
+.chart .hit:focus-visible { stroke: var(--orange); stroke-width: 2; }
+.chart-tip {
+  position: absolute; pointer-events: none; background: var(--navy); color: #fff; border-radius: var(--radius-sm); padding: 6px 10px;
+  font-size: 13px; white-space: nowrap; transform: translate(-50%, -100%); margin-top: -8px; box-shadow: var(--shadow-pop); z-index: 2;
+}
+.chart-tip strong { display: block; font-family: var(--font-display); font-size: 15px; font-weight: 600; }
+.chart-table { margin-top: 10px; }
+.chart-table summary { cursor: pointer; color: var(--muted); font-size: 13px; width: fit-content; }
+
+/* ---------- قوائم صغيرة داخل البطاقات (الأكثر مبيعاً، المخزون، المندوبون، الحالات) ---------- */
+.rows { list-style: none; margin: 0; padding: 0; }
+.rows li { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.rows li:last-child { border-bottom: 0; }
+.rows img { width: 40px; height: 40px; max-width: none; border-radius: var(--radius-sm); object-fit: cover; background: var(--surface); flex-shrink: 0; }
+.rows .grow { flex: 1; min-width: 0; }
+.rows .grow b { display: block; font-weight: 500; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rows .grow span { color: var(--muted); font-size: 13px; }
+.rows .end { text-align: left; font-family: var(--font-display); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rows a.grow:hover b { color: var(--blue); }
+
+/* ---------- الجداول ---------- */
+/* الجدول داخل .table-wrap يتمرر أفقياً على الشاشات الصغيرة، بدل أن يدفع الصفحة كلها للخارج. */
+.table-wrap { overflow-x: auto; }
+/* min-width: على الهاتف يتمرر الجدول أفقياً بعرض مريح، بدل أن تنضغط أعمدته فوق بعضها. */
+.table { width: 100%; min-width: 640px; border-collapse: collapse; font-size: var(--fs-sm); }
+.table th { text-align: start; font-weight: 500; color: var(--muted); padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; background: #fafbfc; }
+.table td { padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.table tr:last-child td { border-bottom: 0; }
+.table tbody tr:hover { background: #fafbfd; }
+.table .n { font-family: var(--font-display); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.table .sub { display: block; color: var(--muted); font-size: 12.5px; }
+/* max-width: none يلغي قاعدة img العامة (max-width: 100%)، وإلا انكمش عمود الصورة في الجدول إلى صفر. */
+.table .thumb { width: 44px; height: 44px; max-width: none; border-radius: var(--radius-sm); object-fit: cover; background: var(--surface); }
+.table a.row-link { font-weight: 600; color: var(--navy); }
+.table a.row-link:hover { color: var(--blue); text-decoration: underline; }
+.table .flag { color: var(--amber); font-size: 12.5px; display: flex; align-items: center; gap: 4px; }
+.table tr.inactive td { color: var(--muted); }
+.table tr.inactive .thumb { opacity: 0.5; }
+.empty-row { text-align: center; color: var(--muted); padding: 32px !important; }
+
+/* ---------- شريط الأدوات: تبويبات الحالة، والبحث، والتصفية ---------- */
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.toolbar input[type="search"], .toolbar select {
+  border: 1.5px solid var(--line); border-radius: var(--radius-sm); padding: 7px 12px; background: #fff; min-width: 0; outline: none;
+}
+.toolbar input[type="search"] { flex: 1 1 220px; }
+.toolbar input:focus, .toolbar select:focus { border-color: var(--navy); }
+.seg { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 10px 12px 0; border-bottom: 1px solid var(--line); }
+.seg::-webkit-scrollbar { display: none; }
+.seg a, .seg button {
+  padding: 8px 12px; border: 0; background: none; cursor: pointer; white-space: nowrap; font-weight: 500; color: var(--muted);
+  border-bottom: 2px solid transparent; font-size: var(--fs-sm);
+}
+.seg a:hover, .seg button:hover { color: var(--navy); }
+.seg .active { color: var(--navy); border-bottom-color: var(--orange); font-weight: 600; }
+.seg .c { font-family: var(--font-display); font-size: 12px; background: var(--surface); border-radius: 999px; padding: 0 7px; margin-inline-start: 4px; }
+.pager { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--fs-sm); }
+
+/* ---------- تفاصيل الطلب: قائمة مفتاح/قيمة، ومجموعة إجراءات ---------- */
+.dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; margin: 0; font-size: 15px; }
+.dl dt { color: var(--muted); }
+.dl dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.action-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.action-row + .action-row { margin-top: 10px; }
+.inline-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.inline-form select, .inline-form input {
+  border: 1.5px solid var(--line); border-radius: var(--radius-sm); padding: 8px 12px; background: #fff; min-width: 0; flex: 1 1 180px; outline: none;
+}
+.inline-form select:focus, .inline-form input:focus { border-color: var(--navy); }
+.stock-input { width: 76px; border: 1.5px solid var(--line); border-radius: var(--radius-sm); padding: 5px 8px; text-align: center; font-family: var(--font-display); outline: none; }
+.stock-input:focus { border-color: var(--navy); }
+.stock-input.changed { border-color: var(--orange); background: var(--orange-soft); }
+
+/* مفتاح التشغيل (Switch): مربع اختيار عادي، مرسوم كمفتاح. يبقى checkbox حقيقياً لقارئ الشاشة ولوحة المفاتيح. */
+.switch { appearance: none; -webkit-appearance: none; width: 40px; height: 22px; border-radius: 999px; background: var(--line-strong); position: relative; cursor: pointer; transition: background 0.15s; margin: 0; flex-shrink: 0; }
+.switch::after { content: ""; position: absolute; top: 3px; right: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
+.switch:checked { background: var(--green); }
+.switch:checked::after { transform: translateX(-18px); }
+.check-row { display: flex; align-items: center; gap: 10px; font-weight: 500; margin-bottom: 16px; }
+
+/* شبكة النماذج: عمود على الهاتف، وعمودان على الشاشات الأكبر. .full يأخذ العرض كله. */
+.form-grid { display: grid; gap: 0 18px; }
+.img-preview { width: 100%; max-width: 220px; aspect-ratio: 1; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); object-fit: cover; }
+.img-picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.img-picks button { border: 2px solid transparent; padding: 0; border-radius: var(--radius-sm); cursor: pointer; background: none; }
+.img-picks button.on { border-color: var(--orange); }
+.img-picks img { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; }
+
+/* ---------- النافذة المنبثقة (<dialog> الأصلي في المتصفح، بلا مكتبة) ---------- */
+.modal { border: 0; border-radius: var(--radius-lg); padding: 0; width: min(520px, calc(100vw - 32px)); box-shadow: var(--shadow-pop); color: var(--text); }
+.modal::backdrop { background: rgba(11, 31, 58, 0.45); }
+.modal form { padding: 22px; }
+.modal h2 { margin: 0 0 16px; font-size: var(--fs-lg); }
+.modal .modal-actions { display: flex; gap: 8px; justify-content: flex-start; margin-top: 8px; }
+
+/* ---------- صفحة الدخول (للمدير والمندوب) ---------- */
+.auth-page { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--navy); }
+.auth-card { width: min(420px, 100%); background: var(--card); border-radius: var(--radius-lg); padding: 28px 24px; }
+.auth-card .brand { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.auth-card .brand img { height: 36px; width: auto; }
+.auth-card .brand span { color: var(--muted); font-size: var(--fs-sm); }
+.auth-card h1 { margin: 0 0 4px; font-size: var(--fs-xl); }
+.auth-card > p { margin: 0 0 20px; color: var(--muted); font-size: var(--fs-sm); }
+.auth-foot { margin-top: 18px; font-size: 13px; color: var(--muted); text-align: center; }
+.auth-foot a { color: var(--blue); }
+
+/* ---------- تطبيق المندوب ---------- */
+.courier { max-width: 640px; margin: 0 auto; width: 100%; padding-bottom: 88px; }
+.c-top { background: var(--navy); color: #fff; padding: 14px 16px 18px; position: sticky; top: 0; z-index: 30; }
+.c-top .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.c-top img { height: 30px; width: auto; }
+.c-top .who { font-size: 14px; color: #c3cee0; display: flex; align-items: center; gap: 10px; }
+.c-top .who button { background: rgba(255, 255, 255, 0.08); border: 0; color: #fff; border-radius: var(--radius-sm); width: 38px; height: 38px; display: grid; place-items: center; cursor: pointer; }
+/* ملخص اليوم: ثلاثة أرقام فقط، فالمندوب يقرؤها بنظرة. */
+.c-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+.c-stats div { background: rgba(255, 255, 255, 0.07); border-radius: var(--radius-sm); padding: 8px 10px; }
+.c-stats b { display: block; font-family: var(--font-display); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; color: #fff; line-height: 1.4; }
+.c-stats span { font-size: 12px; color: #c3cee0; }
+.c-list { padding: 16px; display: grid; gap: 14px; }
+.c-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.c-card .c-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.c-card .c-head .order-id { font-size: 12.5px; }
+.c-card .c-body { padding: 14px; display: grid; gap: 12px; }
+.c-name { font-family: var(--font-display); font-size: 19px; font-weight: 600; margin: 0; }
+.c-addr { display: flex; gap: 8px; color: var(--text-2); }
+.c-addr .icon { color: var(--muted); margin-top: 4px; }
+.c-items { margin: 0; padding: 0 18px 0 0; color: var(--text-2); font-size: 15px; }
+/* المبلغ المطلوب تحصيله: أوضح شيء في البطاقة. */
+.c-cash { display: flex; justify-content: space-between; align-items: center; background: var(--orange-soft); border-radius: var(--radius-sm); padding: 10px 14px; }
+.c-cash span { color: var(--amber); font-weight: 600; }
+.c-cash b { font-family: var(--font-display); font-size: 24px; font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums; }
+.c-cash.paid { background: var(--green-bg); }
+.c-cash.paid span { color: var(--green); }
+.c-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.c-actions .btn { min-height: 48px; }
+.c-actions .wide { grid-column: 1 / -1; }
+.c-note { background: var(--amber-bg); color: var(--amber); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 14px; display: flex; gap: 8px; align-items: flex-start; }
+.c-note .icon { margin-top: 3px; }
+.reasons { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+/* شريط التبويبات السفلي: في متناول الإبهام. */
+.c-tabs {
+  position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--line); display: grid; grid-template-columns: 1fr 1fr 1fr;
+  padding: 6px max(8px, env(safe-area-inset-left)) max(6px, env(safe-area-inset-bottom)); z-index: 30;
+}
+.c-tabs button { background: none; border: 0; padding: 8px 4px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12.5px; font-weight: 500; color: var(--muted); cursor: pointer; border-radius: var(--radius-sm); min-height: 52px; }
+.c-tabs button.active { color: var(--navy); background: var(--surface); }
+
+/* ---------- أحجام الشاشات ---------- */
+@media (min-width: 640px) {
+  .kpis { grid-template-columns: repeat(3, 1fr); }
+  .form-grid { grid-template-columns: 1fr 1fr; }
+  .form-grid .full { grid-column: 1 / -1; }
+}
+@media (min-width: 1024px) {
+  /* على الحاسوب: القائمة الجانبية ثابتة ظاهرة دائماً، ولا حاجة لزر القائمة. */
+  /* خلفية الصفحة كحلية في عمود القائمة (260px من اليمين)، فيبدو العمود ممتداً لآخر الصفحة
+     حتى لو كان المحتوى أطول من الشاشة (القائمة نفسها sticky بارتفاع الشاشة فقط). */
+  .admin { grid-template-columns: 260px 1fr; background: linear-gradient(to left, var(--navy) 260px, var(--bg) 260px); }
+  .side { position: sticky; top: 0; height: 100vh; transform: none; grid-column: 1; grid-row: 1; }
+  .admin-main { grid-column: 2; grid-row: 1; }
+  .menu-btn, .scrim { display: none; }
+  .admin-top { padding: 16px 28px; }
+  .admin-content { padding: 24px 28px 56px; }
+  .kpis { grid-template-columns: repeat(5, 1fr); }
+  .cols { grid-template-columns: 2fr 1fr; }
+  .cols.even { grid-template-columns: 1fr 1fr; }
+  .cols.detail { grid-template-columns: 1.5fr 1fr; }
+}

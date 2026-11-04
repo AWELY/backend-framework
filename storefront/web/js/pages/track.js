@@ -1,7 +1,8 @@
-// صفحة "تتبّع طلبك" (track.html): الضيف يرى طلبه برقم الطلب ورقم الهاتف، دون حساب.
+// صفحة "تتبّع طلبك" (track.html): الضيف يرى طلبه برقم الطلب ورقم الهاتف، دون حساب، مع سجل
+// مراحله، ويستطيع إلغاءه ما دام قيد المراجعة.
 // تفتح مباشرة إن جاء الرابط بالرقمين (track.html?id=...&phone=...)، كالرابط في صفحة النجاح.
 import { api, ApiError } from "../api.js";
-import { mountLayout, esc, errorText, qs } from "../ui.js";
+import { mountLayout, esc, errorText, qs, toast } from "../ui.js";
 import { orderCard } from "../order-view.js";
 
 mountLayout("track");
@@ -22,7 +23,10 @@ app.innerHTML = `
 const form = app.querySelector("[data-form]");
 const result = app.querySelector("[data-result]");
 
-/** يطلب الطلب من الـ API برقمه، مع الهاتف في الاستعلام (?phone=)، ويعرضه كبطاقة. */
+/**
+ * يطلب الطلب من الـ API برقمه، مع الهاتف في الاستعلام (?phone=)، ويعرضه كبطاقة.
+ * السجل يُطلب بنفس الرقمين من إضافة customer-orders. فشله لا يمنع عرض الطلب نفسه.
+ */
 async function track() {
   const id = form.orderId.value.trim();
   const phone = form.phone.value.trim();
@@ -32,8 +36,30 @@ async function track() {
   }
   result.innerHTML = `<div class="loading">جاري البحث...</div>`;
   try {
-    const order = await api(`/orders/${encodeURIComponent(id)}?phone=${encodeURIComponent(phone)}`);
-    result.innerHTML = orderCard(order);
+    const query = `?phone=${encodeURIComponent(phone)}`;
+    const [order, history] = await Promise.all([
+      api(`/orders/${encodeURIComponent(id)}${query}`),
+      api(`/orders/${encodeURIComponent(id)}/history${query}`).catch(() => null),
+    ]);
+    result.innerHTML = orderCard(order, {
+      history,
+      actions: order.status === "pending" ? `<button class="btn btn-danger btn-sm" data-cancel>إلغاء الطلب</button>` : "",
+    });
+    // إلغاء الضيف: نفس شرط العرض (رقم الطلب + الهاتف)، ثم نعيد التتبع ليظهر الطلب ملغى.
+    result.querySelector("[data-cancel]")?.addEventListener("click", async (e) => {
+      if (!confirm("هل تريد إلغاء هذا الطلب؟")) return;
+      // نحفظ الزر قبل أي await: e.currentTarget يصبح null بعد انتهاء معالجة الحدث.
+      const button = e.currentTarget;
+      button.disabled = true;
+      try {
+        await api(`/orders/${encodeURIComponent(order.id)}/cancel${query}`, { method: "POST" });
+        toast("تم إلغاء الطلب");
+        track();
+      } catch (err) {
+        toast(errorText(err), "error");
+        button.disabled = false;
+      }
+    });
   } catch (err) {
     // الـ API يرد 404 في الحالتين، "لا يوجد طلب" و"الهاتف خطأ"، عمداً: لا يكشف أن رقم
     // الطلب صحيح إن كان الهاتف خاطئاً. لذلك رسالتنا واحدة للحالتين.

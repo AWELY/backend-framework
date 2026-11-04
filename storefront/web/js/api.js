@@ -1,7 +1,7 @@
 // الاتصال بالـ API: كل صفحات الموقع تمر من هنا. الموقع لا يعرف شيئاً عن قاعدة البيانات،
 // بل يرسل طلبات HTTP فقط، كأي عميل آخر (Headless).
 import { API_BASE } from "./config.js";
-import { getToken, clearSession, getCartId, setCartId } from "./store.js";
+import { getToken, clearSession, getCartId, setCartId, getStaffSession, clearStaffSession } from "./store.js";
 
 /**
  * خطأ من الـ API، يحمل رمز الحالة ورسالة الخطأ وتفاصيله.
@@ -16,18 +16,12 @@ export class ApiError extends Error {
 }
 
 /**
- * يستدعي الـ API الخاص بالمتجر، ويرسل توكن دخول الزبون إن وُجد.
- *
- * إن انتهت صلاحية التوكن (401)، تُمسح الجلسة ويُعاد الطلب مرة واحدة كضيف. هكذا لا يكسر
- * دخول قديم منتهٍ الصفحات العامة: يرى الزائر المنتجات بدل رسالة خطأ.
- *
- * مثال: await api("/products") ترجع قائمة المنتجات،
- *       و await api("/carts", { method: "POST" }) تنشئ سلة.
+ * الطلب الخام إلى الـ API: يرسل الجسم كـ JSON، والتوكن المعطى (إن وُجد) في ترويسة Authorization،
+ * ويرجع { res, data }. لا يقرر شيئاً عند الخطأ: api() و staffApi() أدناه تقرران.
  */
-export async function api(path, { method = "GET", body, retried = false } = {}) {
+async function request(path, { method = "GET", body, token } = {}) {
   const headers = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
   let res;
@@ -50,16 +44,65 @@ export async function api(path, { method = "GET", body, retried = false } = {}) 
   } catch {
     data = null;
   }
+  return { res, data };
+}
 
+/** يحوّل رد الخطأ إلى ApiError بالشكل الموحد لأخطاء الإطار: { error: { message, details } }. */
+const toError = (res, data) => new ApiError(res.status, data?.error?.message ?? res.statusText, data?.error?.details ?? null);
+
+/**
+ * يستدعي الـ API من صفحات المتجر، ويرسل توكن دخول الزبون إن وُجد.
+ *
+ * إن انتهت صلاحية التوكن (401)، تُمسح الجلسة ويُعاد الطلب مرة واحدة كضيف. هكذا لا يكسر
+ * دخول قديم منتهٍ الصفحات العامة: يرى الزائر المنتجات بدل رسالة خطأ.
+ *
+ * مثال: await api("/products") ترجع قائمة المنتجات،
+ *       و await api("/carts", { method: "POST" }) تنشئ سلة.
+ */
+export async function api(path, { method = "GET", body, retried = false } = {}) {
+  const token = getToken();
+  const { res, data } = await request(path, { method, body, token });
   if (!res.ok) {
     // توكن منتهٍ أو غير صالح: نمسح الجلسة، ونعيد الطلب نفسه مرة واحدة فقط (retried) كضيف.
     if (res.status === 401 && token && !retried && data?.error?.message === "Invalid or expired token") {
       clearSession();
       return api(path, { method, body, retried: true });
     }
-    // الشكل الموحد لأخطاء الـ API: { error: { message, details } }
-    throw new ApiError(res.status, data?.error?.message ?? res.statusText, data?.error?.details ?? null);
+    throw toError(res, data);
   }
+  return data;
+}
+
+// ما تفعله الصفحة حين تنتهي جلسة الموظف (تضبطه لوحة التحكم وتطبيق المندوب: الانتقال لصفحة الدخول).
+let onStaffExpired = () => {};
+export const setStaffExpiredHandler = (handler) => {
+  onStaffExpired = handler;
+};
+
+/**
+ * يستدعي الـ API من لوحة التحكم وتطبيق المندوب، بتوكن الموظف (لا توكن الزبون).
+ *
+ * 401 بتوكن موجود يعني: انتهت مدته (12 ساعة)، أو أوقف المدير الحساب. نمسح الجلسة ونستدعي
+ * onStaffExpired لتعيد الصفحة الموظف إلى الدخول. لا نعيد المحاولة كضيف: صفحات الموظفين لا
+ * معنى لها بلا دخول.
+ */
+export async function staffApi(path, { method = "GET", body } = {}) {
+  const token = getStaffSession()?.token;
+  const { res, data } = await request(path, { method, body, token });
+  if (!res.ok) {
+    if (res.status === 401 && token) {
+      clearStaffSession();
+      onStaffExpired();
+    }
+    throw toError(res, data);
+  }
+  return data;
+}
+
+/** دخول الموظف: لا يرسل أي توكن، ويرجع { staff, token } أو يرمي ApiError. */
+export async function staffLogin(email, password) {
+  const { res, data } = await request("/staff/login", { method: "POST", body: { email, password } });
+  if (!res.ok) throw toError(res, data);
   return data;
 }
 
