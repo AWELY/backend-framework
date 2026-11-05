@@ -1,7 +1,7 @@
 const { parseArgs } = require("node:util");
-const { hashPassword } = require("commerce-framework");
+const { hashPassword, validate } = require("commerce-framework");
 const { buildApp } = require("./app");
-const { STAFF_REPOSITORY, STAFF_ROLES, normalizeEmail } = require("./plugins/staff");
+const { STAFF_REPOSITORY, normalizeEmail, createSchema } = require("./plugins/staff");
 
 /**
  * ينشئ حساب موظف (مدير أو مندوب) من الطرفية. هكذا يُنشأ أول مدير في متجر حقيقي، قبل أن
@@ -23,20 +23,29 @@ const { values } = parseArgs({
 });
 
 async function main() {
-  // نفس شروط مسار POST /staff، برسائل واضحة قبل أن نتصل بالقاعدة.
-  if (!STAFF_ROLES.includes(values.role)) throw new Error(`--role must be one of: ${STAFF_ROLES.join(", ")}`);
-  if (!values.name?.trim()) throw new Error("--name is required");
-  if (!values.email?.includes("@")) throw new Error("--email is required");
-  if (!values.password || values.password.length < 8) throw new Error("--password must be at least 8 characters");
+  // نفس قواعد مسار POST /staff تماماً (createSchema من إضافة الموظفين، ومدقّق الإطار نفسه)،
+  // قبل أن نتصل بالقاعدة. الحقول الناقصة لا تُمرَّر، فيقول المدقّق إنها مطلوبة.
+  const input = Object.fromEntries(
+    Object.entries({ role: values.role, name: values.name?.trim(), email: values.email?.trim(), password: values.password, phone: values.phone?.trim() })
+      .filter(([, v]) => v)
+  );
+  let valid;
+  try {
+    valid = validate(createSchema, input);
+  } catch (err) {
+    // ValidationError من الإطار: details قائمة الحقول الخاطئة، فنطبعها سطراً لكل حقل.
+    const lines = (err.details ?? []).map((d) => `  --${d.field}: ${d.message}`).join("\n");
+    throw new Error(`Invalid staff account:\n${lines}`);
+  }
 
   const { app } = buildApp("warn");
   try {
     const staff = await app.container.resolve(STAFF_REPOSITORY).create({
-      role: values.role,
-      name: values.name.trim(),
-      email: normalizeEmail(values.email),
-      phone: values.phone?.trim() || null,
-      passwordHash: await hashPassword(values.password),
+      role: valid.role,
+      name: valid.name,
+      email: normalizeEmail(valid.email),
+      phone: valid.phone ?? null,
+      passwordHash: await hashPassword(valid.password),
     });
     console.log(`Created ${staff.role} account: ${staff.email}`);
   } finally {

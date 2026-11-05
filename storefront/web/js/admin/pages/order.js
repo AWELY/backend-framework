@@ -210,6 +210,8 @@ function bindActions(order, delivery) {
     b.addEventListener("click", () => {
       const status = b.dataset.status;
       if (status === "cancelled" && !confirm("إلغاء الطلب يعيد كمياته إلى المخزون. هل أنت متأكد؟")) return;
+      // "شُحن بطريقة أخرى" والمندوب لم يستلم الطلب: الخادم يلغي تعيينه (إضافة التوصيل تستمع للحدث).
+      if (status === "shipped" && delivery && !delivery.pickedUpAt && !confirm(`سيُلغى تعيين ${delivery.courierName} لهذا الطلب. متابعة؟`)) return;
       run(b, () => staffApi(`/orders/${order.id}/status`, { method: "PATCH", body: { status } }), LABELS[status]);
     })
   );

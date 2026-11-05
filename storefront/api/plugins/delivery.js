@@ -1,5 +1,6 @@
 const {
   ORDERS_SERVICE,
+  ORDERS_REPOSITORY,
   validateBody,
   requirePermission,
   withTransaction,
@@ -39,6 +40,10 @@ const { STAFF_REPOSITORY, activeStaff, activeAdminGuard } = require("./staff");
  *     POST   /courier/deliveries/:orderId/pickup     استلم الطلب من المحل (يصبح الطلب shipped)
  *     POST   /courier/deliveries/:orderId/deliver    سلّمه للزبون (delivered، والدفع النقدي paid)
  *     POST   /courier/deliveries/:orderId/note       { note }: إبلاغ المدير بمشكلة (الزبون لا يرد...)
+ *
+ * المدير يستطيع أيضاً تغيير الحالة مباشرة من مسار الإطار (PATCH /orders/:id/status)، مثلاً "شُحن بطريقة
+ * أخرى" أو "تم التسليم". الإضافة تستمع لحدث order.statusChanged لتبقى بياناتها متسقة مع ذلك
+ * (انظر "الاستماع لتغييرات الحالة" أدناه).
  *
  * خيارات الإضافة:
  *   cashPaymentMethods : طرق الدفع التي يحصّلها المندوب نقداً. الافتراضي ["cod"] (إضافة الإطار).
@@ -102,10 +107,11 @@ function courierDelivery({ cashPaymentMethods = ["cod"], timeZone = "Africa/Trip
   return {
     name: "courier-delivery",
     migrations: deliveryMigrations,
-    setup({ router, container, pool, accessControl, authenticate }) {
+    setup({ router, container, pool, accessControl, authenticate, extensions }) {
       const staffRepo = () => container.resolve(STAFF_REPOSITORY);
       // خدمة الطلبات من الإطار: الطريق الوحيد لتغيير حالة طلب أو حالة دفعه.
       const orders = () => container.resolve(ORDERS_SERVICE);
+      const ordersRepo = () => container.resolve(ORDERS_REPOSITORY);
       const canManage = requirePermission(accessControl, "deliveries:manage");
       const canWork = requirePermission(accessControl, "deliveries:work");
       const adminActive = activeAdminGuard(staffRepo);
@@ -115,6 +121,23 @@ function courierDelivery({ cashPaymentMethods = ["cod"], timeZone = "Africa/Trip
         const { rows } = await query(db, `${DELIVERY_SELECT} WHERE d.order_id = $1`, [orderId]);
         return rows[0] ? toDelivery(rows[0]) : null;
       }
+
+      // ---------------- الاستماع لتغييرات الحالة ----------------
+      /**
+       * حين يغيّر المدير الحالة من مسار الإطار مباشرة (لا من تطبيق المندوب):
+       *   - shipped والمندوب لم يستلم الطلب بعد: "شُحن بطريقة أخرى"، فالمندوب لم يعد مسؤولاً عنه.
+       *     نحذف التعيين، وإلا لظهر الطلب في تطبيقه "في الطريق" وسجّل تسليماً ونقداً لم يحصّله.
+       *     (في مسار الاستلام نفسه نسجّل picked_up_at قبل تغيير الحالة، فلا يحذفه هذا الشرط.)
+       *   - delivered: نختم وقت التسليم إن لم يُختم، فلا يبقى الطلب "جارياً" في قوائم التوصيل.
+       * الإطار يطلق الحدث بعد COMMIT، وفشل المستمع يُسجَّل ولا يُفشل تغيير الحالة نفسه.
+       */
+      extensions.on("order.statusChanged", async ({ order }) => {
+        if (order.status === "shipped") {
+          await query(pool, "DELETE FROM deliveries WHERE order_id = $1 AND picked_up_at IS NULL", [order.id]);
+        } else if (order.status === "delivered") {
+          await query(pool, "UPDATE deliveries SET delivered_at = coalesce(delivered_at, now()) WHERE order_id = $1", [order.id]);
+        }
+      });
 
       // ---------------- مسارات المدير ----------------
 
@@ -132,11 +155,13 @@ function courierDelivery({ cashPaymentMethods = ["cod"], timeZone = "Africa/Trip
         const { courierId } = req.body;
         if (!isUuid(orderId)) throw new NotFoundError("Order not found");
         const delivery = await withTransaction(pool, async (client) => {
-          const { rows } = await query(client, "SELECT status FROM orders WHERE id = $1 FOR UPDATE", [orderId]);
+          const { rows } = await query(client, "SELECT status, shipping_method FROM orders WHERE id = $1 FOR UPDATE", [orderId]);
           if (!rows[0]) throw new NotFoundError("Order not found");
           if (rows[0].status !== "confirmed") {
             throw new ConflictError("Only confirmed orders can be assigned to a courier", { status: rows[0].status });
           }
+          // طلب "الاستلام من المحل" يأخذه الزبون بنفسه، فلا معنى لمندوب له.
+          if (rows[0].shipping_method === "pickup") throw new ConflictError("Pickup orders do not need a courier");
           const courier = isUuid(courierId)
             ? (await query(client, "SELECT role, is_active FROM staff WHERE id = $1", [courierId])).rows[0]
             : undefined;
@@ -182,7 +207,12 @@ function courierDelivery({ cashPaymentMethods = ["cod"], timeZone = "Africa/Trip
           const { rows } = await query(pool, `${DELIVERY_SELECT} WHERE d.order_id = ANY($1::uuid[])`, [ids]);
           return res.json(rows.map(toDelivery));
         }
-        const { rows } = await query(pool, `${DELIVERY_SELECT} WHERE d.delivered_at IS NULL ORDER BY d.assigned_at`);
+        // "الجارية": الطلب ما زال مؤكداً أو في الطريق. طلب أُلغي بعد تعيينه ليس جارياً، حتى لو لم يُختم تسليمه.
+        const { rows } = await query(
+          pool,
+          `${DELIVERY_SELECT} JOIN orders o ON o.id = d.order_id
+            WHERE d.delivered_at IS NULL AND o.status IN ('confirmed', 'shipped') ORDER BY d.assigned_at`
+        );
         res.json(rows.map(toDelivery));
       });
 
@@ -228,7 +258,8 @@ function courierDelivery({ cashPaymentMethods = ["cod"], timeZone = "Africa/Trip
        * (مبدأ تقليل البيانات، نفس مبدأ الإطار مع إضافات الشحن).
        *
        *   scope=active : الطلبات التي معه الآن (مؤكدة أو مشحونة).
-       *   scope=done   : آخر 50 طلباً انتهت (سُلّمت أو أُلغيت بعد تعيينه).
+       *   scope=done   : ما انتهى في آخر 7 أيام (سُلّم أو أُلغي بعد تعيينه)، حتى 50 طلباً. لا نُبقي
+       *                  أسماء الزبائن وعناوينهم في هاتف المندوب أكثر من ذلك.
        */
       router.get("/courier/deliveries", authenticate, canWork, async (req, res) => {
         const me = await activeStaff(staffRepo(), req, ["courier"]);
@@ -239,7 +270,9 @@ function courierDelivery({ cashPaymentMethods = ["cod"], timeZone = "Africa/Trip
                   o.total, o.payment_method, o.payment_status, o.created_at,
                   d.assigned_at, d.picked_up_at, d.delivered_at, d.cash_collected, d.note
              FROM deliveries d JOIN orders o ON o.id = d.order_id
-            WHERE d.courier_id = $1 AND o.status ${done ? "IN ('delivered', 'cancelled')" : "IN ('confirmed', 'shipped')"}
+            WHERE d.courier_id = $1 AND o.status ${done
+              ? "IN ('delivered', 'cancelled') AND coalesce(d.delivered_at, o.updated_at) > now() - interval '7 days'"
+              : "IN ('confirmed', 'shipped')"}
             ORDER BY ${done ? "coalesce(d.delivered_at, o.updated_at) DESC LIMIT 50" : "d.assigned_at"}`,
           [me.id]
         );
@@ -296,23 +329,31 @@ function courierDelivery({ cashPaymentMethods = ["cod"], timeZone = "Africa/Trip
        *      نتراجع عن الخطوة 1، فلا يبقى طلب ملغى "مستلَماً".
        * لماذا ليس في معاملة واحدة؟ changeStatus في الإطار تفتح معاملتها الخاصة، ولا تقبل اتصالاً
        * من الخارج. (ملاحظة للإطار: قبول client اختياري فيها يجعل هذا ذرياً بالكامل.)
+       *
+       * قابل للإعادة: إن توقف الخادم بين الخطوتين، يبقى الطلب "مؤكداً" وعليه حجز. ضغط المندوب
+       * مرة أخرى يتجاوز الخطوة 1 (الحجز له أصلاً) ويكمل الخطوة 2، بدل أن يعلق الطلب.
        */
       router.post("/courier/deliveries/:orderId/pickup", authenticate, canWork, async (req, res) => {
         const me = await activeStaff(staffRepo(), req, ["courier"]);
         const current = await myDelivery(me, req.params.orderId);
-        if (current.status !== "confirmed" || current.picked_up_at) {
+        if (current.status !== "confirmed") {
           throw new ConflictError("This order is not waiting for pickup", { status: current.status });
         }
-        const claimed = await query(
-          pool,
-          "UPDATE deliveries SET picked_up_at = now() WHERE order_id = $1 AND courier_id = $2 AND picked_up_at IS NULL",
-          [current.order_id, me.id]
-        );
-        if (claimed.rowCount === 0) throw new ConflictError("This order is not waiting for pickup");
+        let claimedNow = false;
+        if (!current.picked_up_at) {
+          const claimed = await query(
+            pool,
+            "UPDATE deliveries SET picked_up_at = now() WHERE order_id = $1 AND courier_id = $2 AND picked_up_at IS NULL",
+            [current.order_id, me.id]
+          );
+          if (claimed.rowCount === 0) throw new ConflictError("This order is not waiting for pickup");
+          claimedNow = true;
+        }
         try {
           await orders().changeStatus(current.order_id, "shipped");
         } catch (err) {
-          await query(pool, "UPDATE deliveries SET picked_up_at = NULL WHERE order_id = $1", [current.order_id]);
+          // نتراجع فقط عن حجز سجّلناه في هذا الطلب نفسه.
+          if (claimedNow) await query(pool, "UPDATE deliveries SET picked_up_at = NULL WHERE order_id = $1", [current.order_id]);
           throw err;
         }
         res.json(await findDelivery(pool, current.order_id));
@@ -321,19 +362,30 @@ function courierDelivery({ cashPaymentMethods = ["cod"], timeZone = "Africa/Trip
       /**
        * "تم التسليم": الطلب delivered، وإن كان الدفع نقداً عند الاستلام فالمندوب حصّل المبلغ،
        * فتصبح حالة الدفع paid برقم مرجعي يذكر اسم المندوب (يظهر للمدير في تفاصيل الطلب).
-       * آلة الحالات في الإطار ترفض التسليم قبل الاستلام (shipped فقط يصبح delivered).
+       *
+       * الشروط: أن يكون المندوب قد استلم الطلب فعلاً (picked_up_at)، فلا يُسجَّل نقد على مندوب لم
+       * يحمل الطلب أصلاً. وآلة الحالات في الإطار ترفض التسليم قبل الشحن على أي حال.
+       *
+       * قابل للإعادة: الخطوات ثلاث (الحالة، ثم الدفع، ثم الختم)، وكل واحدة في معاملتها. إن توقف
+       * الخادم بعد الأولى، يبقى الطلب "تم التسليم" بلا ختم (cash_collected فارغ)، وضغط المندوب مرة
+       * أخرى يكمل الباقي فقط. cash_collected غير الفارغ يعني أن التسليم اكتمل.
        */
       router.post("/courier/deliveries/:orderId/deliver", authenticate, canWork, async (req, res) => {
         const me = await activeStaff(staffRepo(), req, ["courier"]);
         const current = await myDelivery(me, req.params.orderId);
-        if (current.status !== "shipped") throw new ConflictError("Pick up the order before delivering it", { status: current.status });
-        const order = await orders().changeStatus(current.order_id, "delivered");
+        if (!current.picked_up_at) throw new ConflictError("Pick up the order before delivering it", { status: current.status });
+        if (!["shipped", "delivered"].includes(current.status) || current.cash_collected !== null) {
+          throw new ConflictError("This delivery is already completed", { status: current.status });
+        }
+        const order = current.status === "shipped"
+          ? await orders().changeStatus(current.order_id, "delivered")
+          : await ordersRepo().findById(current.order_id);
         let cash = 0;
         if (cashPaymentMethods.includes(order.paymentMethod) && ["pending", "unpaid"].includes(order.paymentStatus)) {
           await orders().setPaymentStatus(order.id, "paid", `نقداً عبر المندوب: ${me.name}`);
           cash = order.total;
         }
-        await query(pool, "UPDATE deliveries SET delivered_at = now(), cash_collected = $2 WHERE order_id = $1", [order.id, cash]);
+        await query(pool, "UPDATE deliveries SET delivered_at = coalesce(delivered_at, now()), cash_collected = $2 WHERE order_id = $1", [order.id, cash]);
         res.json(await findDelivery(pool, order.id));
       });
 
@@ -341,7 +393,10 @@ function courierDelivery({ cashPaymentMethods = ["cod"], timeZone = "Africa/Trip
       router.post("/courier/deliveries/:orderId/note", authenticate, canWork, validateBody(noteSchema), async (req, res) => {
         const me = await activeStaff(staffRepo(), req, ["courier"]);
         const current = await myDelivery(me, req.params.orderId);
-        await query(pool, "UPDATE deliveries SET note = $2, note_at = now() WHERE order_id = $1", [current.order_id, req.body.note.trim()]);
+        // الطول يُفحص بعد حذف المسافات: ملاحظة من مسافات فقط ليست ملاحظة.
+        const note = req.body.note.trim();
+        if (note.length < 2) throw new ValidationError("Validation failed", [{ field: "note", message: "must be at least 2 characters" }]);
+        await query(pool, "UPDATE deliveries SET note = $2, note_at = now() WHERE order_id = $1", [current.order_id, note]);
         res.json(await findDelivery(pool, current.order_id));
       });
     },

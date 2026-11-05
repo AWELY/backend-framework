@@ -60,13 +60,15 @@ function storeReports({ timeZone = "Africa/Tripoli", lowStockThreshold = 3 } = {
               GROUP BY day ORDER BY day`,
             [timeZone]
           ),
-          // الأكثر مبيعاً بالكمية، من سطور الطلبات (الاسم المنسوخ وقت الشراء).
+          // الأكثر مبيعاً بالكمية، من سطور الطلبات (الاسم المنسوخ وقت الشراء). المنتج المحذوف
+          // product_id فيه NULL، فنجمّع المحذوفات بأسمائها (CASE) لا معاً في صف واحد.
           query(
             pool,
             `SELECT oi.product_id, max(oi.product_name) AS name, sum(oi.quantity)::int AS quantity, sum(oi.line_total)::bigint AS revenue
                FROM order_items oi JOIN orders o ON o.id = oi.order_id
               WHERE o.status <> 'cancelled'
-              GROUP BY oi.product_id ORDER BY quantity DESC, revenue DESC LIMIT 5`
+              GROUP BY oi.product_id, CASE WHEN oi.product_id IS NULL THEN oi.product_name END
+              ORDER BY quantity DESC, revenue DESC LIMIT 5`
           ),
           // المنتجات المعروضة التي بقي منها lowStockThreshold قطع أو أقل (المنتج بلا صف مخزون كميته 0).
           query(

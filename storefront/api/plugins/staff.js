@@ -269,7 +269,8 @@ function staffAccounts({ tokenSecret, tokenTtlSeconds = 12 * 60 * 60 }) {
         validateBody(updateSchema, { partial: true }),
         async (req, res) => {
           const { password, ...rest } = req.body;
-          if (rest.isActive === false && req.params.id === req.auth.userId) {
+          // نقارن بحروف صغيرة: القاعدة تقبل UUID بحروف كبيرة أيضاً، فلا يتجاوز أحد الشرط بتغيير حالة الحروف.
+          if (rest.isActive === false && req.params.id.toLowerCase() === req.auth.userId?.toLowerCase()) {
             throw new ConflictError("You cannot disable your own account");
           }
           const fields = password ? { ...rest, passwordHash: await hashPassword(password) } : rest;
@@ -290,4 +291,5 @@ module.exports = {
   activeStaff,
   activeAdminGuard,
   normalizeEmail,
+  createSchema,
 };

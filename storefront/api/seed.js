@@ -79,8 +79,8 @@ const CATALOGUE = [
 
 /**
  * حسابات موظفين تجريبية، لتجربة لوحة التحكم وتطبيق المندوب مباشرة بعد التثبيت.
- * كلمات المرور معروفة (مكتوبة في README)، فهي لقاعدة تجريبية فقط: على متجر حقيقي أوقفها من
- * لوحة التحكم (صفحة الموظفين)، وأنشئ حساباتك بـ npm run create-staff.
+ * كلمات المرور معروفة (مكتوبة في README)، فهي لقاعدة تجريبية فقط. لهذا لا تُنشأ أبداً إن كان
+ * NODE_ENV=production: على متجر حقيقي يُملأ الكتالوج فقط، وتُنشأ الحسابات بـ npm run create-staff.
  */
 const DEMO_STAFF = [
   { role: "admin", name: "مدير المتجر", email: "admin@ama.ly", phone: "0910000001", password: "Ama@admin2026" },
@@ -136,7 +136,9 @@ async function main() {
     // الموظفون التجريبيون: من مستودع إضافة الموظفين في الحاوية، تماماً كمستودعات الإطار.
     // الموجود (بنفس البريد) لا يُلمس، فتشغيل seed مرة ثانية لا يعيد كلمة مرور غيّرتها.
     const staff = app.container.resolve(STAFF_REPOSITORY);
-    for (const member of DEMO_STAFF) {
+    const demoStaff = process.env.NODE_ENV === "production" ? [] : DEMO_STAFF;
+    if (!demoStaff.length) console.log("NODE_ENV=production: demo staff accounts skipped - use npm run create-staff.");
+    for (const member of demoStaff) {
       if (await staff.findCredentials(member.email)) continue;
       const { password, ...rest } = member;
       await staff.create({ ...rest, passwordHash: await hashPassword(password) });

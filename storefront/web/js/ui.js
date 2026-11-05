@@ -159,6 +159,8 @@ export function errorText(err) {
   if (err.message === "The courier has already picked up this order") return "استلم المندوب الطلب من المحل، فلا يمكن تغييره الآن.";
   if (err.message === "Pick up the order before delivering it") return "سجّل استلام الطلب من المحل أولاً.";
   if (err.message === "This order is not waiting for pickup") return "هذا الطلب ليس بانتظار الاستلام (ربما أُلغي أو تغيّرت حالته).";
+  if (err.message === "This delivery is already completed") return "سُجّل تسليم هذا الطلب من قبل.";
+  if (err.message === "Pickup orders do not need a courier") return "طلب الاستلام من المحل لا يحتاج مندوباً.";
   // 409 من آلة حالات الطلب في الإطار، مثل محاولة شحن طلب ملغي.
   if (err.message?.startsWith("Cannot change an order from")) return "لا يمكن نقل الطلب إلى هذه الحالة من حالته الحالية.";
   if (err.status === 403) return "ليست لديك صلاحية لهذه العملية.";
